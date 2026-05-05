@@ -2,10 +2,10 @@
   "name": "showy",
   "displayName": "Showy",
   "description": "Visualize workspace folders and files as an interactive tree in VS Code.",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "publisher": "showy",
   "engines": {
-    "vscode": "^1.70.0"
+    "vscode": "^1.118.0"
   },
   "categories": [
     "Other"

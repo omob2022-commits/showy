@@ -81,7 +81,12 @@ function openShowyPanel(context) {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
     });
-    panel.webview.html = getWebviewContent(panel.webview, context.extensionPath);
+    // Load webview content asynchronously
+    getWebviewContent(panel.webview, context.extensionPath).then(html => {
+        if (panel) {
+            panel.webview.html = html;
+        }
+    });
     panel.onDidDispose(() => {
         panel = undefined;
         if (!sidebarView) {
@@ -195,7 +200,12 @@ class ShowySidebarProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.file(path.join(this.context.extensionPath, 'media'))]
         };
-        webviewView.webview.html = getWebviewContent(webviewView.webview, this.context.extensionPath);
+        // Load webview content asynchronously
+        getWebviewContent(webviewView.webview, this.context.extensionPath).then(html => {
+            if (sidebarView) {
+                sidebarView.webview.html = html;
+            }
+        });
         registerWebviewMessageHandlers(webviewView.webview);
         webviewView.onDidDispose(() => {
             sidebarView = undefined;
@@ -412,10 +422,10 @@ async function sendNodeStats(nodePath) {
         postToWebviews({ type: 'status', text: 'Unable to load stats for this node.' });
     }
 }
-function getWebviewContent(webview, extensionPath) {
+async function getWebviewContent(webview, extensionPath) {
     const nonce = getNonce();
     const htmlPath = path.join(extensionPath, 'media', 'webview.html');
-    let html = fs.readFileSync(htmlPath, 'utf-8');
+    let html = await fs.promises.readFile(htmlPath, 'utf-8');
     // Replace template placeholders
     html = html.replace(/\{\{nonce\}\}/g, nonce);
     html = html.replace(/\{\{cspSource\}\}/g, webview.cspSource);

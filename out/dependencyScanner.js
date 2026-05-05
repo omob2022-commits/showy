@@ -163,7 +163,7 @@ async function resolveDependencyPath(dependency, fromFile) {
 /**
  * Resolves a JavaScript/TypeScript import path
  */
-function resolveJavaScriptDependency(dependency, fromDir) {
+async function resolveJavaScriptDependency(dependency, fromDir) {
     // Handle relative imports
     if (dependency.startsWith('.')) {
         const resolvedPath = path.join(fromDir, dependency);
@@ -171,21 +171,32 @@ function resolveJavaScriptDependency(dependency, fromDir) {
         const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'];
         for (const ext of extensions) {
             const filePath = resolvedPath + ext;
-            if (fs.existsSync(filePath)) {
+            try {
+                await fs.promises.access(filePath);
                 return filePath;
+            }
+            catch {
+                // File doesn't exist, try next extension
             }
         }
         // Phase 2: Check if it's a directory with an index file
-        if (fs.existsSync(resolvedPath)) {
-            const stat = fs.statSync(resolvedPath);
+        try {
+            const stat = await fs.promises.stat(resolvedPath);
             if (stat.isDirectory()) {
                 for (const indexExt of ['.ts', '.tsx', '.js', '.jsx', '.mjs']) {
                     const indexPath = path.join(resolvedPath, `index${indexExt}`);
-                    if (fs.existsSync(indexPath)) {
+                    try {
+                        await fs.promises.access(indexPath);
                         return indexPath;
+                    }
+                    catch {
+                        // Index file doesn't exist, try next extension
                     }
                 }
             }
+        }
+        catch {
+            // Path doesn't exist
         }
     }
     // For node_modules, we just return null (can't easily resolve all)
@@ -194,37 +205,59 @@ function resolveJavaScriptDependency(dependency, fromDir) {
 /**
  * Resolves a Python import path
  */
-function resolvePythonDependency(dependency, fromDir) {
+async function resolvePythonDependency(dependency, fromDir) {
     // Try relative import from same directory
     const pyFile = path.join(fromDir, `${dependency}.py`);
-    if (fs.existsSync(pyFile)) {
+    try {
+        await fs.promises.access(pyFile);
         return pyFile;
+    }
+    catch {
+        // File doesn't exist
     }
     // Try as a package (directory with __init__.py)
     const pkgDir = path.join(fromDir, dependency);
-    if (fs.existsSync(pkgDir)) {
-        const initFile = path.join(pkgDir, '__init__.py');
-        if (fs.existsSync(initFile)) {
-            return initFile;
+    try {
+        const stat = await fs.promises.stat(pkgDir);
+        if (stat.isDirectory()) {
+            const initFile = path.join(pkgDir, '__init__.py');
+            try {
+                await fs.promises.access(initFile);
+                return initFile;
+            }
+            catch {
+                // __init__.py doesn't exist
+            }
         }
+    }
+    catch {
+        // Directory doesn't exist
     }
     return null;
 }
 /**
  * Resolves a C++ include path
  */
-function resolveCppDependency(dependency, fromDir) {
+async function resolveCppDependency(dependency, fromDir) {
     // Try as relative path from current file's directory
     const resolvedPath = path.join(fromDir, dependency);
-    if (fs.existsSync(resolvedPath)) {
+    try {
+        await fs.promises.access(resolvedPath);
         return resolvedPath;
+    }
+    catch {
+        // File doesn't exist
     }
     // Try with .h or .hpp extensions if not already present
     if (!dependency.endsWith('.h') && !dependency.endsWith('.hpp')) {
         for (const ext of ['.h', '.hpp']) {
             const withExt = resolvedPath + ext;
-            if (fs.existsSync(withExt)) {
+            try {
+                await fs.promises.access(withExt);
                 return withExt;
+            }
+            catch {
+                // File doesn't exist
             }
         }
     }

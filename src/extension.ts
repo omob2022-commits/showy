@@ -68,7 +68,12 @@ function openShowyPanel(context: vscode.ExtensionContext) {
     localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
   });
 
-  panel.webview.html = getWebviewContent(panel.webview, context.extensionPath);
+  // Load webview content asynchronously
+  getWebviewContent(panel.webview, context.extensionPath).then(html => {
+    if (panel) {
+      panel.webview.html = html;
+    }
+  });
 
   panel.onDidDispose(() => {
     panel = undefined;
@@ -197,7 +202,14 @@ class ShowySidebarProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       localResourceRoots: [vscode.Uri.file(path.join(this.context.extensionPath, 'media'))]
     };
-    webviewView.webview.html = getWebviewContent(webviewView.webview, this.context.extensionPath);
+    
+    // Load webview content asynchronously
+    getWebviewContent(webviewView.webview, this.context.extensionPath).then(html => {
+      if (sidebarView) {
+        sidebarView.webview.html = html;
+      }
+    });
+    
     registerWebviewMessageHandlers(webviewView.webview);
     webviewView.onDidDispose(() => {
       sidebarView = undefined;
@@ -432,11 +444,11 @@ async function sendNodeStats(nodePath: string) {
   }
 }
 
-function getWebviewContent(webview: vscode.Webview, extensionPath: string): string {
+async function getWebviewContent(webview: vscode.Webview, extensionPath: string): Promise<string> {
   const nonce = getNonce();
   const htmlPath = path.join(extensionPath, 'media', 'webview.html');
 
-  let html = fs.readFileSync(htmlPath, 'utf-8');
+  let html = await fs.promises.readFile(htmlPath, 'utf-8');
 
   // Replace template placeholders
   html = html.replace(/\{\{nonce\}\}/g, nonce);

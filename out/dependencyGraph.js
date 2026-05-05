@@ -20,8 +20,8 @@ async function buildDependencyGraph(rootNode) {
     collectFilePaths(rootNode, allFiles);
     const allFilesSet = new Set(allFiles);
     // Second pass: scan dependencies for each file in parallel
-    const scanPromises = allFiles.map(async (filePath) => {
-        const nodeId = `node_${graph.nodes.size}`;
+    const scanPromises = allFiles.map(async (filePath, index) => {
+        const nodeId = `node_${index}`;
         const dependencies = [];
         try {
             const rawDependencies = await (0, dependencyScanner_1.scanFileDependencies)(filePath);
@@ -59,8 +59,11 @@ async function buildDependencyGraph(rootNode) {
             const depNodeId = graph.nodesByPath.get(depPath);
             if (depNodeId) {
                 const depNode = graph.nodes.get(depNodeId);
-                if (depNode && !depNode.dependents.includes(node.path)) {
-                    depNode.dependents.push(node.path);
+                if (depNode) {
+                    const dependentsSet = new Set(depNode.dependents);
+                    if (!dependentsSet.has(node.path)) {
+                        depNode.dependents.push(node.path);
+                    }
                 }
             }
         }
