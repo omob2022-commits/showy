@@ -1,0 +1,35 @@
+{
+  "name": "showy",
+  "displayName": "Showy",
+  "description": "Visualize workspace folders and files as an interactive tree in VS Code.",
+  "version": "0.0.1",
+  "publisher": "showy",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onCommand:showy.openProjectMap"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "showy.openProjectMap",
+        "title": "Showy: Open Project Map"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.118.0",
+    "typescript": "^5.6.0"
+  }
+}
