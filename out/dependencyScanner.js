@@ -41,23 +41,6 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const dependencyCache = new Map();
-// Language-specific regex patterns for detecting dependencies
-const PATTERNS = {
-    javascript: {
-        // Matches: import X from 'path' or import X from "path"
-        es6Import: /import\s+(?:{[^}]*}|[^'"]+)\s+from\s+['"]([^'"]+)['"]/g,
-        // Matches: require('path') or require("path")
-        commonjs: /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    },
-    python: {
-        // Matches: import module or from module import
-        import: /^(?:from\s+([^\s.]+)|import\s+([^\s,]+))/gm,
-    },
-    cpp: {
-        // Matches: #include "path/file.h" or #include <path/file.h>
-        include: /#include\s+[<"]([^>"]+)[>"]/g,
-    },
-};
 /**
  * Detects the language of a file based on its extension
  */
@@ -89,10 +72,14 @@ async function scanFileDependencies(filePath) {
             return [];
         }
         // Read file with size limit (only read first 100KB to avoid performance issues)
-        const stat = fs.statSync(filePath);
+        const stat = await fs.promises.stat(filePath);
         const maxSize = 100 * 1024;
         const bytesToRead = Math.min(stat.size, maxSize);
-        const content = fs.readFileSync(filePath, 'utf-8').substring(0, bytesToRead);
+        const buffer = Buffer.alloc(bytesToRead);
+        const fd = await fs.promises.open(filePath, 'r');
+        await fd.read(buffer, 0, bytesToRead, 0);
+        await fd.close();
+        const content = buffer.toString('utf-8');
         const dependencies = extractDependencies(content, language, filePath);
         // Cache the result
         dependencyCache.set(filePath, {
@@ -112,21 +99,24 @@ async function scanFileDependencies(filePath) {
 function extractDependencies(content, language, filePath) {
     const dependencies = new Set();
     if (language === 'javascript') {
-        // Extract ES6 imports
+        // Extract ES6 imports (including type imports and side-effect imports)
+        // Matches: import X from 'path', import type { X } from 'path', import './styles.css'
+        const es6Pattern = /import\s+(?:type\s+)?(?:{[^}]*}|[^'"]+\s+from\s+)?['"]([^'"]+)['"]/g;
         let match;
-        const es6Pattern = PATTERNS.javascript.es6Import;
         while ((match = es6Pattern.exec(content)) !== null) {
             dependencies.add(match[1]);
         }
         // Extract CommonJS requires
-        const commonjsPattern = PATTERNS.javascript.commonjs;
+        const commonjsPattern = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
         while ((match = commonjsPattern.exec(content)) !== null) {
             dependencies.add(match[1]);
         }
     }
     else if (language === 'python') {
+        // Matches: import module or from module import
+        // Note: from . import X (relative imports) will have empty match[1], handled by moduleName check
+        const importPattern = /^(?:from\s+([^\s.]+)|import\s+([^\s,]+))/gm;
         let match;
-        const importPattern = PATTERNS.python.import;
         while ((match = importPattern.exec(content)) !== null) {
             const moduleName = match[1] || match[2];
             if (moduleName) {
@@ -135,8 +125,9 @@ function extractDependencies(content, language, filePath) {
         }
     }
     else if (language === 'cpp') {
+        // Matches: #include "path/file.h" or #include <path/file.h>
+        const includePattern = /#include\s+[<"]([^>"]+)[>"]/g;
         let match;
-        const includePattern = PATTERNS.cpp.include;
         while ((match = includePattern.exec(content)) !== null) {
             dependencies.add(match[1]);
         }
@@ -176,28 +167,28 @@ function resolveJavaScriptDependency(dependency, fromDir) {
     // Handle relative imports
     if (dependency.startsWith('.')) {
         const resolvedPath = path.join(fromDir, dependency);
-        // Try with various extensions
-        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json', ''];
+        // Phase 1: Try with various file extensions
+        const extensions = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.json'];
         for (const ext of extensions) {
-            const filePath = ext ? resolvedPath + ext : resolvedPath;
+            const filePath = resolvedPath + ext;
             if (fs.existsSync(filePath)) {
-                const stat = fs.statSync(filePath);
-                if (stat.isDirectory()) {
-                    // Check for index file
-                    for (const indexExt of ['.ts', '.tsx', '.js', '.jsx', '.mjs']) {
-                        const indexPath = path.join(filePath, `index${indexExt}`);
-                        if (fs.existsSync(indexPath)) {
-                            return indexPath;
-                        }
+                return filePath;
+            }
+        }
+        // Phase 2: Check if it's a directory with an index file
+        if (fs.existsSync(resolvedPath)) {
+            const stat = fs.statSync(resolvedPath);
+            if (stat.isDirectory()) {
+                for (const indexExt of ['.ts', '.tsx', '.js', '.jsx', '.mjs']) {
+                    const indexPath = path.join(resolvedPath, `index${indexExt}`);
+                    if (fs.existsSync(indexPath)) {
+                        return indexPath;
                     }
-                }
-                else {
-                    return filePath;
                 }
             }
         }
     }
-    // For node_modules, we just return the dependency name (can't easily resolve all)
+    // For node_modules, we just return null (can't easily resolve all)
     return null;
 }
 /**

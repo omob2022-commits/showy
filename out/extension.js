@@ -39,13 +39,19 @@ const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const child_process_1 = require("child_process");
+const util_1 = require("util");
 const dependencyScanner_1 = require("./dependencyScanner");
 const dependencyGraph_1 = require("./dependencyGraph");
+const execAsync = (0, util_1.promisify)(child_process_1.exec);
+// Directories to skip during folder scanning
+const EXCLUDED_DIRS = new Set([
+    'node_modules', '.git', 'dist', 'out', '.next', '__pycache__',
+    '.cache', 'coverage', '.nyc_output', 'build', '.turbo', '.svelte-kit'
+]);
 let panel;
 let sidebarView;
 let watchers = [];
 let refreshTimer;
-// Helper to get configuration values
 function getConfig(key) {
     return vscode.workspace.getConfiguration('showy').get(key);
 }
@@ -75,7 +81,7 @@ function openShowyPanel(context) {
         enableScripts: true,
         localResourceRoots: [vscode.Uri.file(path.join(context.extensionPath, 'media'))]
     });
-    panel.webview.html = getWebviewContent(panel.webview);
+    panel.webview.html = getWebviewContent(panel.webview, context.extensionPath);
     panel.onDidDispose(() => {
         panel = undefined;
         if (!sidebarView) {
@@ -111,7 +117,6 @@ async function refreshTree() {
     if (getConfig('showDependencies') !== false && rootNodes.length > 0) {
         try {
             const graph = await (0, dependencyGraph_1.buildDependencyGraph)(rootNodes[0]);
-            // Convert Map to serializable format for webview
             const graphData = {
                 nodes: Array.from(graph.nodes.values()),
                 stats: {
@@ -121,6 +126,15 @@ async function refreshTree() {
                 }
             };
             postToWebviews({ type: 'graphData', graph: graphData });
+            // Detect circular dependencies
+            const circles = (0, dependencyGraph_1.findCircularDependencies)(graph);
+            if (circles.length > 0) {
+                postToWebviews({ type: 'circularDependencies', circles });
+                postToWebviews({
+                    type: 'status',
+                    text: `⚠️ Found ${circles.length} circular ${circles.length === 1 ? 'dependency' : 'dependencies'}`
+                });
+            }
         }
         catch (error) {
             console.error('Failed to build dependency graph:', error);
@@ -165,7 +179,9 @@ async function handleWebviewMessage(message) {
             await refreshTree();
             break;
         case 'nodeSelected':
-            await sendNodeStats(message.path);
+            if (message.path) {
+                await sendNodeStats(message.path);
+            }
             break;
     }
 }
@@ -179,7 +195,7 @@ class ShowySidebarProvider {
             enableScripts: true,
             localResourceRoots: [vscode.Uri.file(path.join(this.context.extensionPath, 'media'))]
         };
-        webviewView.webview.html = getWebviewContent(webviewView.webview);
+        webviewView.webview.html = getWebviewContent(webviewView.webview, this.context.extensionPath);
         registerWebviewMessageHandlers(webviewView.webview);
         webviewView.onDidDispose(() => {
             sidebarView = undefined;
@@ -192,7 +208,7 @@ class ShowySidebarProvider {
 }
 async function getLineCount(filePath) {
     try {
-        const content = fs.readFileSync(filePath, 'utf-8');
+        const content = await fs.promises.readFile(filePath, 'utf-8');
         return content.split('\n').length;
     }
     catch {
@@ -206,57 +222,35 @@ async function getGitInfo(filePath) {
             return undefined;
         }
         const repoPath = workspaceFolder.uri.fsPath;
-        // Check if git is available by trying a simple git command
+        // Check if git is available
         try {
-            (0, child_process_1.execSync)('git rev-parse --git-dir', { cwd: repoPath, stdio: 'pipe' });
+            await execAsync('git rev-parse --git-dir', { cwd: repoPath });
         }
         catch {
             return undefined;
         }
-        // Get relative path from repo root
         const relPath = path.relative(repoPath, filePath);
-        // Get last commit timestamp
+        // Run all three git queries concurrently
+        const [timestampResult, countResult, authorResult] = await Promise.allSettled([
+            execAsync(`git log -1 --format=%ai -- "${relPath}"`, { cwd: repoPath }),
+            execAsync(`git rev-list --count HEAD -- "${relPath}"`, { cwd: repoPath }),
+            execAsync(`git log --reverse --format=%an -- "${relPath}"`, { cwd: repoPath }),
+        ]);
         let lastModified = 'N/A';
-        try {
-            const timestamp = (0, child_process_1.execSync)(`git log -1 --format=%ai -- "${relPath}"`, {
-                cwd: repoPath,
-                stdio: 'pipe',
-                encoding: 'utf-8',
-                timeout: 3000,
-            }).trim();
-            if (timestamp) {
-                lastModified = new Date(timestamp).toLocaleString();
+        if (timestampResult.status === 'fulfilled') {
+            const ts = timestampResult.value.stdout.trim();
+            if (ts) {
+                lastModified = new Date(ts).toLocaleString();
             }
         }
-        catch {
-            // Ignore errors
-        }
-        // Get commit count
         let commitCount = 0;
-        try {
-            const count = (0, child_process_1.execSync)(`git rev-list --count HEAD -- "${relPath}"`, {
-                cwd: repoPath,
-                stdio: 'pipe',
-                encoding: 'utf-8',
-                timeout: 3000,
-            }).trim();
-            commitCount = parseInt(count) || 0;
+        if (countResult.status === 'fulfilled') {
+            commitCount = parseInt(countResult.value.stdout.trim()) || 0;
         }
-        catch {
-            // Ignore errors
-        }
-        // Get original author
         let author = 'Unknown';
-        try {
-            author = (0, child_process_1.execSync)(`git log --reverse --format=%an -- "${relPath}" | head -1`, {
-                cwd: repoPath,
-                stdio: 'pipe',
-                encoding: 'utf-8',
-                timeout: 3000,
-            }).trim() || 'Unknown';
-        }
-        catch {
-            // Ignore errors
+        if (authorResult.status === 'fulfilled') {
+            const lines = authorResult.value.stdout.trim().split('\n');
+            author = lines[0] || 'Unknown';
         }
         return { lastModified, commitCount, author };
     }
@@ -265,26 +259,36 @@ async function getGitInfo(filePath) {
         return undefined;
     }
 }
+/**
+ * Detects binary content by checking for null bytes in the first 8KB.
+ */
+function looksLikeBinary(buffer) {
+    const checkLength = Math.min(buffer.length, 8192);
+    for (let i = 0; i < checkLength; i++) {
+        if (buffer[i] === 0) {
+            return true;
+        }
+    }
+    return false;
+}
 async function getFilePreview(filePath, maxChars = 500) {
     try {
-        const stat = fs.statSync(filePath);
-        // Only preview text files with reasonable size
+        const stat = await fs.promises.stat(filePath);
+        // Skip files larger than 1MB
         if (stat.size > 1024 * 1024) {
-            // Skip files larger than 1MB
             return undefined;
         }
-        // Check if it looks like a text file based on extension
-        const ext = path.extname(filePath).toLowerCase();
-        const binaryExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bin', '.exe', '.dll', '.so'];
-        if (binaryExtensions.includes(ext)) {
+        // Read a small buffer first to check for binary content
+        const fd = await fs.promises.open(filePath, 'r');
+        const headerBuf = Buffer.alloc(Math.min(stat.size, 8192));
+        await fd.read(headerBuf, 0, headerBuf.length, 0);
+        await fd.close();
+        if (looksLikeBinary(headerBuf)) {
             return undefined;
         }
-        const content = fs.readFileSync(filePath, 'utf-8');
+        const content = await fs.promises.readFile(filePath, 'utf-8');
         const preview = content.substring(0, maxChars);
-        if (content.length > maxChars) {
-            return preview + '...';
-        }
-        return preview;
+        return content.length > maxChars ? preview + '...' : preview;
     }
     catch {
         return undefined;
@@ -308,6 +312,10 @@ async function scanFolder(uri, displayName) {
             return a[1] === vscode.FileType.Directory ? -1 : 1;
         });
         for (const [name, fileType] of entries) {
+            // Skip noisy/irrelevant directories
+            if (fileType === vscode.FileType.Directory && EXCLUDED_DIRS.has(name)) {
+                continue;
+            }
             const childUri = vscode.Uri.joinPath(uri, name);
             if (fileType === vscode.FileType.Directory) {
                 const childNode = await scanFolder(childUri, name);
@@ -341,9 +349,6 @@ async function scanFolder(uri, displayName) {
     return folderNode;
 }
 async function sendNodeStats(nodePath) {
-    if (!panel) {
-        return;
-    }
     try {
         const uri = vscode.Uri.file(nodePath);
         const stat = await vscode.workspace.fs.stat(uri);
@@ -365,33 +370,27 @@ async function sendNodeStats(nodePath) {
             }
         }
         else {
-            // For files, gather enhanced stats based on configuration
-            // Get line count if enabled
             if (getConfig('showLineCount') !== false) {
                 const lineCount = await getLineCount(nodePath);
                 if (lineCount > 0) {
                     stats.lineCount = lineCount;
                 }
             }
-            // Get git information if enabled
             if (getConfig('showGitInfo') !== false) {
                 const gitInfo = await getGitInfo(nodePath);
                 if (gitInfo) {
                     stats.gitInfo = gitInfo;
                 }
             }
-            // Get file preview
             const previewSize = getConfig('previewSize') ?? 500;
             const preview = await getFilePreview(nodePath, previewSize);
             if (preview) {
                 stats.preview = preview;
             }
-            // Get dependencies if enabled
             if (getConfig('showDependencies') !== false) {
                 try {
                     const dependencies = await (0, dependencyScanner_1.scanFileDependencies)(nodePath);
                     if (dependencies.length > 0) {
-                        // Try to resolve dependencies to actual file paths
                         const resolvedDeps = {};
                         for (const dep of dependencies) {
                             const resolved = await (0, dependencyScanner_1.resolveDependencyPath)(dep, nodePath);
@@ -405,541 +404,22 @@ async function sendNodeStats(nodePath) {
                 }
             }
         }
-        panel.webview.postMessage({ type: 'nodeStats', stats });
+        // Post to both panel and sidebar
+        postToWebviews({ type: 'nodeStats', stats });
     }
     catch (error) {
         console.error('Failed to load stats:', error);
-        panel.webview.postMessage({ type: 'status', text: 'Unable to load stats for this node.' });
+        postToWebviews({ type: 'status', text: 'Unable to load stats for this node.' });
     }
 }
-function getWebviewContent(webview) {
+function getWebviewContent(webview, extensionPath) {
     const nonce = getNonce();
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://d3js.org https://cdn.jsdelivr.net; style-src 'nonce-${nonce}'; connect-src https:;" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Showy Project Map</title>
-  <script nonce="${nonce}" src="https://d3js.org/d3.v7.min.js"></script>
-  <style nonce="${nonce}">
-    :root {
-      color-scheme: light dark;
-      font-family: Segoe UI, sans-serif;
-    }
-    * {
-      box-sizing: border-box;
-    }
-    body {
-      margin: 0;
-      padding: 0;
-      display: grid;
-      grid-template-rows: auto 1fr;
-      grid-template-columns: 1fr 1fr 0.8fr;
-      height: 100vh;
-      overflow: hidden;
-      gap: 0;
-    }
-    header {
-      grid-column: 1 / -1;
-      padding: 12px 16px;
-      background: #1e1e1e;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    header button {
-      background: #0e639c;
-      border: none;
-      color: white;
-      padding: 6px 12px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      flex-shrink: 0;
-    }
-    header button:hover {
-      background: #1177bb;
-    }
-    .view-tabs {
-      display: flex;
-      gap: 4px;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-    .view-tabs button {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: #d4d4d4;
-      padding: 4px 10px;
-      font-size: 11px;
-      cursor: pointer;
-      border-radius: 2px;
-    }
-    .view-tabs button.active {
-      background: #0e639c;
-      border-color: #0e639c;
-      color: white;
-    }
-    #tree-container {
-      overflow: auto;
-      padding: 16px;
-      background: #252526;
-      color: #d4d4d4;
-      display: none;
-    }
-    #tree-container.active {
-      display: block;
-    }
-    #graph-container {
-      background: #252526;
-      display: none;
-      position: relative;
-      overflow: hidden;
-    }
-    #graph-container.active {
-      display: block;
-    }
-    #graph-svg {
-      width: 100%;
-      height: 100%;
-    }
-    .node {
-      cursor: pointer;
-      stroke: rgba(255,255,255,0.2);
-      stroke-width: 1.5px;
-    }
-    .node:hover {
-      stroke: rgba(255,255,255,0.8);
-      stroke-width: 2px;
-    }
-    .link {
-      stroke: rgba(100,150,200,0.4);
-      stroke-width: 1px;
-    }
-    .node-label {
-      font-size: 11px;
-      fill: #d4d4d4;
-      text-anchor: middle;
-      pointer-events: none;
-      user-select: none;
-    }
-    #details {
-      padding: 16px;
-      border-left: 1px solid rgba(255,255,255,0.08);
-      background: #1e1e1e;
-      color: #d4d4d4;
-      overflow: auto;
-    }
-    #details h2 {
-      margin-top: 0;
-      font-size: 14px;
-    }
-    #details h3 {
-      font-size: 12px;
-      margin: 12px 0 6px 0;
-      color: #9cdcfe;
-    }
-    #details p {
-      font-size: 12px;
-      margin: 4px 0;
-      word-break: break-all;
-    }
-    #status {
-      padding: 8px 16px;
-      color: #9cdcfe;
-      font-size: 11px;
-      background: rgba(0,0,0,0.3);
-    }
-    ul.tree {
-      list-style: none;
-      padding-left: 18px;
-      margin: 0;
-    }
-    li.node {
-      margin: 4px 0;
-      line-height: 1.5;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-    }
-    li.node .label {
-      cursor: pointer;
-      user-select: none;
-      padding: 4px 6px;
-      border-radius: 4px;
-    }
-    li.node .label:hover {
-      background: rgba(255,255,255,0.08);
-    }
-    li.node.folder > .label::before {
-      content: '▸';
-      display: inline-block;
-      width: 16px;
-      transform: rotate(0deg);
-      transition: transform 0.2s ease;
-    }
-    li.node.expanded > .label::before {
-      transform: rotate(90deg);
-    }
-    li.node.folder > ul {
-      display: none;
-      margin-left: 14px;
-    }
-    li.node.expanded > ul {
-      display: block;
-    }
-    .node-meta {
-      color: #9cdcfe;
-      font-size: 0.9rem;
-    }
-    pre {
-      background: rgba(255,255,255,0.04);
-      padding: 8px;
-      border-radius: 4px;
-      overflow: auto;
-      font-size: 11px;
-      margin: 0;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🌳 Showy Project Map</h1>
-    <div class="view-tabs">
-      <button id="treeViewBtn" class="active">Tree</button>
-      <button id="graphViewBtn">Graph</button>
-    </div>
-    <button id="refreshButton">Refresh</button>
-  </header>
-  <div id="tree-container" class="active">
-    <div id="status">Loading workspace tree...</div>
-    <div id="tree"></div>
-  </div>
-  <div id="graph-container">
-    <svg id="graph-svg"></svg>
-  </div>
-  <div id="details">
-    <h2>Details</h2>
-    <div id="detailContent">Select a file or node to see details.</div>
-  </div>
-  <script nonce="${nonce}">
-    const vscode = acquireVsCodeApi();
-    const treeRoot = document.getElementById('tree');
-    const graphContainer = document.getElementById('graph-container');
-    const detailContent = document.getElementById('detailContent');
-    const statusBar = document.getElementById('status');
-    const refreshButton = document.getElementById('refreshButton');
-    const treeViewBtn = document.getElementById('treeViewBtn');
-    const graphViewBtn = document.getElementById('graphViewBtn');
-    const treeContainer = document.getElementById('tree-container');
-    
-    let currentGraphData = null;
-    let d3Available = typeof d3 !== 'undefined';
-
-    treeViewBtn.addEventListener('click', () => {
-      treeContainer.classList.add('active');
-      graphContainer.classList.remove('active');
-      treeViewBtn.classList.add('active');
-      graphViewBtn.classList.remove('active');
-    });
-
-    graphViewBtn.addEventListener('click', () => {
-      if (!currentGraphData) {
-        alert('Graph data not yet loaded. Please wait for tree to load.');
-        return;
-      }
-      treeContainer.classList.remove('active');
-      graphContainer.classList.add('active');
-      treeViewBtn.classList.remove('active');
-      graphViewBtn.classList.add('active');
-      renderGraph();
-    });
-
-    refreshButton.addEventListener('click', () => {
-      vscode.postMessage({ command: 'refresh' });
-      statusBar.textContent = 'Refreshing project tree...';
-      currentGraphData = null;
-      graphContainer.innerHTML = '<svg id="graph-svg"></svg>';
-    });
-
-    window.addEventListener('message', event => {
-      const message = event.data;
-      switch (message.type) {
-        case 'treeData':
-          renderTree(message.tree);
-          break;
-        case 'graphData':
-          currentGraphData = message.graph;
-          statusBar.textContent = 'Graph loaded: ' + currentGraphData.stats.totalFiles + ' files, ' + currentGraphData.stats.totalDependencies + ' dependencies.';
-          break;
-        case 'nodeStats':
-          showStats(message.stats);
-          break;
-        case 'status':
-          statusBar.textContent = message.text;
-          break;
-      }
-    });
-
-    vscode.postMessage({ command: 'ready' });
-
-    function renderTree(nodes) {
-      treeRoot.innerHTML = '';
-      if (!Array.isArray(nodes) || nodes.length === 0) {
-        treeRoot.textContent = 'No workspace folders found.';
-        return;
-      }
-      const treeElement = document.createElement('ul');
-      treeElement.className = 'tree';
-      for (const node of nodes) {
-        treeElement.appendChild(createNodeElement(node));
-      }
-      treeRoot.appendChild(treeElement);
-    }
-
-    function createNodeElement(node) {
-      const item = document.createElement('li');
-      item.className = 'node ' + node.type;
-
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = node.name;
-      label.title = node.path;
-
-      if (node.type === 'folder') {
-        const meta = document.createElement('span');
-        meta.className = 'node-meta';
-        meta.textContent = '(' + (node.childCount ?? 0) + ' items)';
-        label.appendChild(meta);
-      }
-
-      label.addEventListener('click', () => {
-        if (node.type === 'folder') {
-          item.classList.toggle('expanded');
-        }
-        vscode.postMessage({ command: 'nodeSelected', path: node.path });
-      });
-
-      item.appendChild(label);
-
-      if (node.children && node.children.length > 0) {
-        const childList = document.createElement('ul');
-        childList.className = 'tree';
-        for (const child of node.children) {
-          childList.appendChild(createNodeElement(child));
-        }
-        item.appendChild(childList);
-      }
-
-      return item;
-    }
-
-    function renderGraph() {
-      if (!currentGraphData || !d3Available) {
-        detailContent.innerHTML = '<p>Graph data not available or D3.js not loaded.</p>';
-        return;
-      }
-
-      const container = document.getElementById('graph-svg');
-      const width = graphContainer.clientWidth;
-      const height = graphContainer.clientHeight;
-
-      // Clear previous content
-      d3.select(container).selectAll('*').remove();
-
-      // Build D3 nodes and links
-      const nodes = currentGraphData.nodes.map((n, i) => ({
-        id: n.id,
-        path: n.path,
-        label: n.path.split('/').pop() || n.path,
-        index: i
-      }));
-
-      const links = [];
-      for (const node of currentGraphData.nodes) {
-        for (const depPath of node.dependencies) {
-          const targetNode = nodes.find(n => n.path === depPath);
-          if (targetNode) {
-            links.push({
-              source: node.id,
-              target: targetNode.id,
-              sourceNode: node,
-              targetNode: targetNode
-            });
-          }
-        }
-      }
-
-      // Create SVG
-      const svg = d3.select(container)
-        .attr('width', width)
-        .attr('height', height)
-        .attr('style', 'background: #252526;');
-
-      // Create force simulation
-      const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links)
-          .id(d => d.id)
-          .distance(80)
-          .strength(0.3))
-        .force('charge', d3.forceManyBody().strength(-200))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collide', d3.forceCollide(30));
-
-      // Draw links
-      const link = svg.append('g')
-        .selectAll('line')
-        .data(links)
-        .join('line')
-        .attr('class', 'link')
-        .attr('stroke', 'rgba(100,150,200,0.3)')
-        .attr('stroke-width', 1);
-
-      // Draw nodes
-      const node = svg.append('g')
-        .selectAll('circle')
-        .data(nodes)
-        .join('circle')
-        .attr('class', 'node')
-        .attr('r', 8)
-        .attr('fill', d => {
-          const depCount = currentGraphData.nodes.find(n => n.id === d.id).dependencies.length;
-          if (depCount === 0) return '#6a9fb5';
-          if (depCount > 5) return '#d94949';
-          return '#b8a538';
-        })
-        .call(drag(simulation));
-
-      // Draw labels
-      const label = svg.append('g')
-        .selectAll('text')
-        .data(nodes)
-        .join('text')
-        .attr('class', 'node-label')
-        .attr('font-size', '10px')
-        .text(d => d.label)
-        .call(drag(simulation));
-
-      node.on('click', (event, d) => {
-        const nodeData = currentGraphData.nodes.find(n => n.id === d.id);
-        if (nodeData) {
-          vscode.postMessage({ command: 'nodeSelected', path: nodeData.path });
-        }
-      });
-
-      simulation.on('tick', () => {
-        link
-          .attr('x1', d => d.source.x)
-          .attr('y1', d => d.source.y)
-          .attr('x2', d => d.target.x)
-          .attr('y2', d => d.target.y);
-
-        node
-          .attr('cx', d => d.x)
-          .attr('cy', d => d.y);
-
-        label
-          .attr('x', d => d.x)
-          .attr('y', d => d.y - 12);
-      });
-
-      function drag(simulation) {
-        function dragstarted(event, d) {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        }
-
-        function dragged(event, d) {
-          d.fx = event.x;
-          d.fy = event.y;
-        }
-
-        function dragended(event, d) {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }
-
-        return d3.drag()
-          .on('start', dragstarted)
-          .on('drag', dragged)
-          .on('end', dragended);
-      }
-    }
-
-    function showStats(stats) {
-      const createdAt = stats.createdAt ? new Date(stats.createdAt).toLocaleString() : 'N/A';
-      const modifiedAt = stats.modifiedAt ? new Date(stats.modifiedAt).toLocaleString() : 'N/A';
-      let html = '<div>';
-      html += '<p><strong>Path:</strong> ' + escapeHtml(stats.path) + '</p>';
-      html += '<p><strong>Type:</strong> ' + escapeHtml(stats.type) + '</p>';
-      
-      if (stats.size != null) {
-        html += '<p><strong>Size:</strong> ' + formatBytes(stats.size) + '</p>';
-      }
-      
-      if (stats.lineCount != null && stats.lineCount > 0) {
-        html += '<p><strong>Lines:</strong> ' + stats.lineCount + '</p>';
-      }
-      
-      html += '<p><strong>Modified:</strong> ' + modifiedAt + '</p>';
-      html += '<p><strong>Created:</strong> ' + createdAt + '</p>';
-      
-      if (stats.childCount != null) {
-        html += '<p><strong>Children:</strong> ' + stats.childCount + '</p>';
-      }
-
-      if (stats.gitInfo) {
-        html += '<h3>Git Info</h3>';
-        html += '<p><strong>Author:</strong> ' + escapeHtml(stats.gitInfo.author) + '</p>';
-        html += '<p><strong>Commits:</strong> ' + stats.gitInfo.commitCount + '</p>';
-        html += '<p><strong>Last Modified:</strong> ' + escapeHtml(stats.gitInfo.lastModified) + '</p>';
-      }
-
-      if (stats.dependencies && Object.keys(stats.dependencies).length > 0) {
-        html += '<h3>Dependencies (' + Object.keys(stats.dependencies).length + ')</h3>';
-        html += '<pre>' + escapeHtml(JSON.stringify(stats.dependencies, null, 2)) + '</pre>';
-      }
-
-      if (stats.preview) {
-        html += '<h3>Preview</h3>';
-        html += '<pre>' + escapeHtml(stats.preview) + '</pre>';
-      }
-
-      html += '</div>';
-      detailContent.innerHTML = html;
-    }
-
-    function formatBytes(bytes) {
-      if (bytes === 0) return '0 B';
-      const k = 1024;
-      const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    function escapeHtml(unsafe) {
-      return String(unsafe)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-    }
-  </script>
-</body>
-</html>`;
+    const htmlPath = path.join(extensionPath, 'media', 'webview.html');
+    let html = fs.readFileSync(htmlPath, 'utf-8');
+    // Replace template placeholders
+    html = html.replace(/\{\{nonce\}\}/g, nonce);
+    html = html.replace(/\{\{cspSource\}\}/g, webview.cspSource);
+    return html;
 }
 function getNonce() {
     let text = '';

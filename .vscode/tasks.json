@@ -16,20 +16,7 @@
       "type": "shell",
       "command": "npm run watch",
       "isBackground": true,
-      "problemMatcher": [
-        {
-          "owner": "typescript",
-          "source": "ts",
-          "applyTo": "closedDocuments",
-          "fileLocation": ["relative","${workspaceFolder}"],
-          "pattern": {
-            "regexp": "^(.*)$",
-            "file": 1,
-            "location": 2,
-            "message": 3
-          }
-        }
-      ]
+      "problemMatcher": ["$tsc-watch"]
     }
   ]
 }

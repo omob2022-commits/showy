@@ -18,8 +18,9 @@ async function buildDependencyGraph(rootNode) {
     // First pass: collect all file paths
     const allFiles = [];
     collectFilePaths(rootNode, allFiles);
-    // Second pass: scan dependencies for each file
-    for (const filePath of allFiles) {
+    const allFilesSet = new Set(allFiles);
+    // Second pass: scan dependencies for each file in parallel
+    const scanPromises = allFiles.map(async (filePath) => {
         const nodeId = `node_${graph.nodes.size}`;
         const dependencies = [];
         try {
@@ -27,7 +28,7 @@ async function buildDependencyGraph(rootNode) {
             // Try to resolve each dependency
             for (const dep of rawDependencies) {
                 const resolved = await (0, dependencyScanner_1.resolveDependencyPath)(dep, filePath);
-                if (resolved && allFiles.includes(resolved)) {
+                if (resolved && allFilesSet.has(resolved)) {
                     dependencies.push(resolved);
                 }
             }
@@ -35,13 +36,22 @@ async function buildDependencyGraph(rootNode) {
         catch (error) {
             console.error(`Failed to build dependencies for ${filePath}:`, error);
         }
-        graph.nodes.set(nodeId, {
-            id: nodeId,
-            path: filePath,
+        return {
+            nodeId,
+            filePath,
             dependencies,
+        };
+    });
+    const results = await Promise.all(scanPromises);
+    // Build the graph nodes
+    for (const result of results) {
+        graph.nodes.set(result.nodeId, {
+            id: result.nodeId,
+            path: result.filePath,
+            dependencies: result.dependencies,
             dependents: [],
         });
-        graph.nodesByPath.set(filePath, nodeId);
+        graph.nodesByPath.set(result.filePath, result.nodeId);
     }
     // Third pass: build reverse dependencies (dependents)
     for (const node of graph.nodes.values()) {
@@ -101,16 +111,14 @@ function findTransitiveDependencies(graph, filePath, visited = new Set()) {
     }
     visited.add(filePath);
     const direct = findDependencies(graph, filePath);
-    const all = [...direct];
+    const allSet = new Set(direct);
     for (const dep of direct) {
         const transitive = findTransitiveDependencies(graph, dep, visited);
         for (const t of transitive) {
-            if (!all.includes(t)) {
-                all.push(t);
-            }
+            allSet.add(t);
         }
     }
-    return all;
+    return Array.from(allSet);
 }
 /**
  * Detects circular dependencies
@@ -119,14 +127,15 @@ function findCircularDependencies(graph) {
     const circles = [];
     const visited = new Set();
     const recursionStack = new Set();
+    const seenCycles = new Set();
     for (const nodeId of graph.nodes.keys()) {
         if (!visited.has(nodeId)) {
-            findCirclesFromNode(graph, nodeId, visited, recursionStack, [], circles);
+            findCirclesFromNode(graph, nodeId, visited, recursionStack, [], circles, seenCycles);
         }
     }
     return circles;
 }
-function findCirclesFromNode(graph, nodeId, visited, stack, path, circles) {
+function findCirclesFromNode(graph, nodeId, visited, stack, path, circles, seenCycles) {
     visited.add(nodeId);
     stack.add(nodeId);
     path.push(nodeId);
@@ -138,7 +147,7 @@ function findCirclesFromNode(graph, nodeId, visited, stack, path, circles) {
                 continue;
             }
             if (!visited.has(depNodeId)) {
-                findCirclesFromNode(graph, depNodeId, visited, stack, path, circles);
+                findCirclesFromNode(graph, depNodeId, visited, stack, path, circles, seenCycles);
             }
             else if (stack.has(depNodeId)) {
                 // Found a cycle
@@ -147,7 +156,10 @@ function findCirclesFromNode(graph, nodeId, visited, stack, path, circles) {
                     const n = graph.nodes.get(id);
                     return n ? n.path : id;
                 });
-                if (!circles.some((c) => arraysEqual(c, cycle))) {
+                // Create canonical representation to avoid duplicates
+                const cycleKey = [...cycle].sort().join('|');
+                if (!seenCycles.has(cycleKey)) {
+                    seenCycles.add(cycleKey);
                     circles.push(cycle);
                 }
             }
@@ -155,12 +167,6 @@ function findCirclesFromNode(graph, nodeId, visited, stack, path, circles) {
     }
     path.pop();
     stack.delete(nodeId);
-}
-function arraysEqual(a, b) {
-    if (a.length !== b.length) {
-        return false;
-    }
-    return a.every((val, idx) => val === b[idx]);
 }
 /**
  * Gets statistics about the dependency graph

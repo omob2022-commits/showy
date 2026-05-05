@@ -10,11 +10,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onCommand:showy.openProjectMap",
-    "onCommand:showy.openShowySidebar",
-    "onView:showyView"
-  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [

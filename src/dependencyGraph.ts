@@ -1,6 +1,19 @@
 import * as path from 'path';
 import { scanFileDependencies, resolveDependencyPath } from './dependencyScanner';
 
+export interface ShowyNode {
+  id: string;
+  name: string;
+  path: string;
+  type: 'folder' | 'file';
+  size?: number;
+  modifiedAt?: number;
+  childCount?: number;
+  children?: ShowyNode[];
+  lineCount?: number;
+  dependencies?: string[];
+}
+
 export interface DependencyNode {
   id: string;
   path: string;
@@ -16,7 +29,7 @@ export interface DependencyGraph {
 /**
  * Builds a dependency graph from a ShowyNode tree
  */
-export async function buildDependencyGraph(rootNode: any): Promise<DependencyGraph> {
+export async function buildDependencyGraph(rootNode: ShowyNode): Promise<DependencyGraph> {
   const graph: DependencyGraph = {
     nodes: new Map(),
     nodesByPath: new Map(),
@@ -25,9 +38,10 @@ export async function buildDependencyGraph(rootNode: any): Promise<DependencyGra
   // First pass: collect all file paths
   const allFiles: string[] = [];
   collectFilePaths(rootNode, allFiles);
+  const allFilesSet = new Set(allFiles);
 
-  // Second pass: scan dependencies for each file
-  for (const filePath of allFiles) {
+  // Second pass: scan dependencies for each file in parallel
+  const scanPromises = allFiles.map(async (filePath) => {
     const nodeId = `node_${graph.nodes.size}`;
     const dependencies: string[] = [];
 
@@ -37,7 +51,7 @@ export async function buildDependencyGraph(rootNode: any): Promise<DependencyGra
       // Try to resolve each dependency
       for (const dep of rawDependencies) {
         const resolved = await resolveDependencyPath(dep, filePath);
-        if (resolved && allFiles.includes(resolved)) {
+        if (resolved && allFilesSet.has(resolved)) {
           dependencies.push(resolved);
         }
       }
@@ -45,14 +59,24 @@ export async function buildDependencyGraph(rootNode: any): Promise<DependencyGra
       console.error(`Failed to build dependencies for ${filePath}:`, error);
     }
 
-    graph.nodes.set(nodeId, {
-      id: nodeId,
-      path: filePath,
+    return {
+      nodeId,
+      filePath,
       dependencies,
+    };
+  });
+
+  const results = await Promise.all(scanPromises);
+
+  // Build the graph nodes
+  for (const result of results) {
+    graph.nodes.set(result.nodeId, {
+      id: result.nodeId,
+      path: result.filePath,
+      dependencies: result.dependencies,
       dependents: [],
     });
-
-    graph.nodesByPath.set(filePath, nodeId);
+    graph.nodesByPath.set(result.filePath, result.nodeId);
   }
 
   // Third pass: build reverse dependencies (dependents)
@@ -74,7 +98,7 @@ export async function buildDependencyGraph(rootNode: any): Promise<DependencyGra
 /**
  * Recursively collects all file paths from a ShowyNode tree
  */
-function collectFilePaths(node: any, files: string[]): void {
+function collectFilePaths(node: ShowyNode, files: string[]): void {
   if (node.type === 'file') {
     files.push(node.path);
   } else if (node.type === 'folder' && node.children) {
@@ -124,18 +148,16 @@ export function findTransitiveDependencies(
 
   visited.add(filePath);
   const direct = findDependencies(graph, filePath);
-  const all = [...direct];
+  const allSet = new Set(direct);
 
   for (const dep of direct) {
     const transitive = findTransitiveDependencies(graph, dep, visited);
     for (const t of transitive) {
-      if (!all.includes(t)) {
-        all.push(t);
-      }
+      allSet.add(t);
     }
   }
 
-  return all;
+  return Array.from(allSet);
 }
 
 /**
@@ -145,10 +167,11 @@ export function findCircularDependencies(graph: DependencyGraph): string[][] {
   const circles: string[][] = [];
   const visited = new Set<string>();
   const recursionStack = new Set<string>();
+  const seenCycles = new Set<string>();
 
   for (const nodeId of graph.nodes.keys()) {
     if (!visited.has(nodeId)) {
-      findCirclesFromNode(graph, nodeId, visited, recursionStack, [], circles);
+      findCirclesFromNode(graph, nodeId, visited, recursionStack, [], circles, seenCycles);
     }
   }
 
@@ -161,7 +184,8 @@ function findCirclesFromNode(
   visited: Set<string>,
   stack: Set<string>,
   path: string[],
-  circles: string[][]
+  circles: string[][],
+  seenCycles: Set<string>
 ): void {
   visited.add(nodeId);
   stack.add(nodeId);
@@ -176,7 +200,7 @@ function findCirclesFromNode(
       }
 
       if (!visited.has(depNodeId)) {
-        findCirclesFromNode(graph, depNodeId, visited, stack, path, circles);
+        findCirclesFromNode(graph, depNodeId, visited, stack, path, circles, seenCycles);
       } else if (stack.has(depNodeId)) {
         // Found a cycle
         const cycleStart = path.indexOf(depNodeId);
@@ -184,7 +208,11 @@ function findCirclesFromNode(
           const n = graph.nodes.get(id);
           return n ? n.path : id;
         });
-        if (!circles.some((c) => arraysEqual(c, cycle))) {
+        
+        // Create canonical representation to avoid duplicates
+        const cycleKey = [...cycle].sort().join('|');
+        if (!seenCycles.has(cycleKey)) {
+          seenCycles.add(cycleKey);
           circles.push(cycle);
         }
       }
@@ -195,12 +223,6 @@ function findCirclesFromNode(
   stack.delete(nodeId);
 }
 
-function arraysEqual(a: string[], b: string[]): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  return a.every((val, idx) => val === b[idx]);
-}
 
 /**
  * Gets statistics about the dependency graph
