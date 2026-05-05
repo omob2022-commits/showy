@@ -37,9 +37,16 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
+const fs = __importStar(require("fs"));
+const child_process_1 = require("child_process");
+const dependencyScanner_1 = require("./dependencyScanner");
 let panel;
 let watchers = [];
 let refreshTimer;
+// Helper to get configuration values
+function getConfig(key) {
+    return vscode.workspace.getConfiguration('showy').get(key);
+}
 function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('showy.openProjectMap', () => {
         openShowyPanel(context);
@@ -116,6 +123,106 @@ function disposeWatchers() {
         refreshTimer = undefined;
     }
 }
+async function getLineCount(filePath) {
+    try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        return content.split('\n').length;
+    }
+    catch {
+        return 0;
+    }
+}
+async function getGitInfo(filePath) {
+    try {
+        const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+        if (!workspaceFolder) {
+            return undefined;
+        }
+        const repoPath = workspaceFolder.uri.fsPath;
+        // Check if git is available by trying a simple git command
+        try {
+            (0, child_process_1.execSync)('git rev-parse --git-dir', { cwd: repoPath, stdio: 'pipe' });
+        }
+        catch {
+            return undefined;
+        }
+        // Get relative path from repo root
+        const relPath = path.relative(repoPath, filePath);
+        // Get last commit timestamp
+        let lastModified = 'N/A';
+        try {
+            const timestamp = (0, child_process_1.execSync)(`git log -1 --format=%ai -- "${relPath}"`, {
+                cwd: repoPath,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 3000,
+            }).trim();
+            if (timestamp) {
+                lastModified = new Date(timestamp).toLocaleString();
+            }
+        }
+        catch {
+            // Ignore errors
+        }
+        // Get commit count
+        let commitCount = 0;
+        try {
+            const count = (0, child_process_1.execSync)(`git rev-list --count HEAD -- "${relPath}"`, {
+                cwd: repoPath,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 3000,
+            }).trim();
+            commitCount = parseInt(count) || 0;
+        }
+        catch {
+            // Ignore errors
+        }
+        // Get original author
+        let author = 'Unknown';
+        try {
+            author = (0, child_process_1.execSync)(`git log --reverse --format=%an -- "${relPath}" | head -1`, {
+                cwd: repoPath,
+                stdio: 'pipe',
+                encoding: 'utf-8',
+                timeout: 3000,
+            }).trim() || 'Unknown';
+        }
+        catch {
+            // Ignore errors
+        }
+        return { lastModified, commitCount, author };
+    }
+    catch (error) {
+        console.error(`Failed to get git info for ${filePath}:`, error);
+        return undefined;
+    }
+}
+async function getFilePreview(filePath, maxChars = 500) {
+    try {
+        const stat = fs.statSync(filePath);
+        // Only preview text files with reasonable size
+        if (stat.size > 1024 * 1024) {
+            // Skip files larger than 1MB
+            return undefined;
+        }
+        // Check if it looks like a text file based on extension
+        const ext = path.extname(filePath).toLowerCase();
+        const binaryExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bin', '.exe', '.dll', '.so'];
+        if (binaryExtensions.includes(ext)) {
+            return undefined;
+        }
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const preview = content.substring(0, maxChars);
+        if (content.length > maxChars) {
+            return preview + '...';
+        }
+        return preview;
+    }
+    catch {
+        return undefined;
+    }
+}
 async function scanFolder(uri, displayName) {
     const folderNode = {
         id: uri.toString(),
@@ -188,6 +295,47 @@ async function sendNodeStats(nodePath) {
             }
             catch {
                 stats.childCount = 0;
+            }
+        }
+        else {
+            // For files, gather enhanced stats based on configuration
+            // Get line count if enabled
+            if (getConfig('showLineCount') !== false) {
+                const lineCount = await getLineCount(nodePath);
+                if (lineCount > 0) {
+                    stats.lineCount = lineCount;
+                }
+            }
+            // Get git information if enabled
+            if (getConfig('showGitInfo') !== false) {
+                const gitInfo = await getGitInfo(nodePath);
+                if (gitInfo) {
+                    stats.gitInfo = gitInfo;
+                }
+            }
+            // Get file preview
+            const previewSize = getConfig('previewSize') ?? 500;
+            const preview = await getFilePreview(nodePath, previewSize);
+            if (preview) {
+                stats.preview = preview;
+            }
+            // Get dependencies if enabled
+            if (getConfig('showDependencies') !== false) {
+                try {
+                    const dependencies = await (0, dependencyScanner_1.scanFileDependencies)(nodePath);
+                    if (dependencies.length > 0) {
+                        // Try to resolve dependencies to actual file paths
+                        const resolvedDeps = {};
+                        for (const dep of dependencies) {
+                            const resolved = await (0, dependencyScanner_1.resolveDependencyPath)(dep, nodePath);
+                            resolvedDeps[dep] = resolved;
+                        }
+                        stats.dependencies = resolvedDeps;
+                    }
+                }
+                catch (error) {
+                    console.error(`Failed to scan dependencies for ${nodePath}:`, error);
+                }
             }
         }
         panel.webview.postMessage({ type: 'nodeStats', stats });

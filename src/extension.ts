@@ -1,7 +1,16 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import { execSync } from 'child_process';
+import { scanFileDependencies, resolveDependencyPath } from './dependencyScanner';
 
 type NodeType = 'folder' | 'file';
+
+interface GitInfo {
+  lastModified: string;
+  commitCount: number;
+  author: string;
+}
 
 interface ShowyNode {
   id: string;
@@ -12,11 +21,20 @@ interface ShowyNode {
   modifiedAt?: number;
   childCount?: number;
   children?: ShowyNode[];
+  lineCount?: number;
+  gitInfo?: GitInfo;
+  preview?: string;
+  dependencies?: string[];
 }
 
 let panel: vscode.WebviewPanel | undefined;
 let watchers: vscode.FileSystemWatcher[] = [];
 let refreshTimer: NodeJS.Timeout | undefined;
+
+// Helper to get configuration values
+function getConfig(key: string): any {
+  return vscode.workspace.getConfiguration('showy').get(key);
+}
 
 export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
@@ -111,6 +129,113 @@ function disposeWatchers() {
   }
 }
 
+async function getLineCount(filePath: string): Promise<number> {
+  try {
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return content.split('\n').length;
+  } catch {
+    return 0;
+  }
+}
+
+async function getGitInfo(filePath: string): Promise<GitInfo | undefined> {
+  try {
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+    if (!workspaceFolder) {
+      return undefined;
+    }
+
+    const repoPath = workspaceFolder.uri.fsPath;
+    
+    // Check if git is available by trying a simple git command
+    try {
+      execSync('git rev-parse --git-dir', { cwd: repoPath, stdio: 'pipe' });
+    } catch {
+      return undefined;
+    }
+
+    // Get relative path from repo root
+    const relPath = path.relative(repoPath, filePath);
+
+    // Get last commit timestamp
+    let lastModified = 'N/A';
+    try {
+      const timestamp = execSync(`git log -1 --format=%ai -- "${relPath}"`, {
+        cwd: repoPath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        timeout: 3000,
+      }).trim();
+      if (timestamp) {
+        lastModified = new Date(timestamp).toLocaleString();
+      }
+    } catch {
+      // Ignore errors
+    }
+
+    // Get commit count
+    let commitCount = 0;
+    try {
+      const count = execSync(`git rev-list --count HEAD -- "${relPath}"`, {
+        cwd: repoPath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        timeout: 3000,
+      }).trim();
+      commitCount = parseInt(count) || 0;
+    } catch {
+      // Ignore errors
+    }
+
+    // Get original author
+    let author = 'Unknown';
+    try {
+      author = execSync(`git log --reverse --format=%an -- "${relPath}" | head -1`, {
+        cwd: repoPath,
+        stdio: 'pipe',
+        encoding: 'utf-8',
+        timeout: 3000,
+      }).trim() || 'Unknown';
+    } catch {
+      // Ignore errors
+    }
+
+    return { lastModified, commitCount, author };
+  } catch (error) {
+    console.error(`Failed to get git info for ${filePath}:`, error);
+    return undefined;
+  }
+}
+
+async function getFilePreview(filePath: string, maxChars: number = 500): Promise<string | undefined> {
+  try {
+    const stat = fs.statSync(filePath);
+    
+    // Only preview text files with reasonable size
+    if (stat.size > 1024 * 1024) {
+      // Skip files larger than 1MB
+      return undefined;
+    }
+
+    // Check if it looks like a text file based on extension
+    const ext = path.extname(filePath).toLowerCase();
+    const binaryExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.bin', '.exe', '.dll', '.so'];
+    if (binaryExtensions.includes(ext)) {
+      return undefined;
+    }
+
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const preview = content.substring(0, maxChars);
+    
+    if (content.length > maxChars) {
+      return preview + '...';
+    }
+    return preview;
+  } catch {
+    return undefined;
+  }
+}
+
 async function scanFolder(uri: vscode.Uri, displayName: string): Promise<ShowyNode> {
   const folderNode: ShowyNode = {
     id: uri.toString(),
@@ -186,6 +311,49 @@ async function sendNodeStats(nodePath: string) {
         stats.childCount = children.length;
       } catch {
         stats.childCount = 0;
+      }
+    } else {
+      // For files, gather enhanced stats based on configuration
+      
+      // Get line count if enabled
+      if (getConfig('showLineCount') !== false) {
+        const lineCount = await getLineCount(nodePath);
+        if (lineCount > 0) {
+          stats.lineCount = lineCount;
+        }
+      }
+
+      // Get git information if enabled
+      if (getConfig('showGitInfo') !== false) {
+        const gitInfo = await getGitInfo(nodePath);
+        if (gitInfo) {
+          stats.gitInfo = gitInfo;
+        }
+      }
+
+      // Get file preview
+      const previewSize = getConfig('previewSize') ?? 500;
+      const preview = await getFilePreview(nodePath, previewSize);
+      if (preview) {
+        stats.preview = preview;
+      }
+
+      // Get dependencies if enabled
+      if (getConfig('showDependencies') !== false) {
+        try {
+          const dependencies = await scanFileDependencies(nodePath);
+          if (dependencies.length > 0) {
+            // Try to resolve dependencies to actual file paths
+            const resolvedDeps: Record<string, string | null> = {};
+            for (const dep of dependencies) {
+              const resolved = await resolveDependencyPath(dep, nodePath);
+              resolvedDeps[dep] = resolved;
+            }
+            stats.dependencies = resolvedDeps;
+          }
+        } catch (error) {
+          console.error(`Failed to scan dependencies for ${nodePath}:`, error);
+        }
       }
     }
 

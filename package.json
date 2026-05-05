@@ -20,7 +20,34 @@
         "command": "showy.openProjectMap",
         "title": "Showy: Open Project Map"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Showy",
+      "properties": {
+        "showy.showGitInfo": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show git information (commit count, author, last modified) in node stats."
+        },
+        "showy.showDependencies": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan and show file dependencies (imports/includes) in node stats."
+        },
+        "showy.previewSize": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "Maximum number of characters to show in file preview."
+        },
+        "showy.showLineCount": {
+          "type": "boolean",
+          "default": true,
+          "description": "Calculate and show line count for files."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
