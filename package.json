@@ -11,7 +11,9 @@
     "Other"
   ],
   "activationEvents": [
-    "onCommand:showy.openProjectMap"
+    "onCommand:showy.openProjectMap",
+    "onCommand:showy.openShowySidebar",
+    "onView:showyView"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -20,8 +22,30 @@
         "command": "showy.openProjectMap",
         "title": "Showy: Open Project Map",
         "icon": "$(graph)"
+      },
+      {
+        "command": "showy.openShowySidebar",
+        "title": "Showy: Reveal Sidebar",
+        "icon": "$(graph)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "showySidebar",
+          "title": "Showy",
+          "icon": "$(graph)"
+        }
+      ]
+    },
+    "views": {
+      "showySidebar": [
+        {
+          "id": "showyView",
+          "name": "Showy Project Map"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {

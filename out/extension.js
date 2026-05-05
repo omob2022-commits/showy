@@ -42,6 +42,7 @@ const child_process_1 = require("child_process");
 const dependencyScanner_1 = require("./dependencyScanner");
 const dependencyGraph_1 = require("./dependencyGraph");
 let panel;
+let sidebarView;
 let watchers = [];
 let refreshTimer;
 // Helper to get configuration values
@@ -52,6 +53,15 @@ function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('showy.openProjectMap', () => {
         openShowyPanel(context);
     }));
+    context.subscriptions.push(vscode.commands.registerCommand('showy.openShowySidebar', async () => {
+        if (sidebarView) {
+            sidebarView.show?.(true);
+        }
+        else {
+            await vscode.commands.executeCommand('workbench.view.extension.showySidebar');
+        }
+    }));
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider('showyView', new ShowySidebarProvider(context)));
 }
 function deactivate() {
     disposeWatchers();
@@ -68,28 +78,20 @@ function openShowyPanel(context) {
     panel.webview.html = getWebviewContent(panel.webview);
     panel.onDidDispose(() => {
         panel = undefined;
-        disposeWatchers();
-    }, null, context.subscriptions);
-    panel.webview.onDidReceiveMessage(async (message) => {
-        switch (message.command) {
-            case 'ready':
-            case 'refresh':
-                await refreshTree();
-                break;
-            case 'nodeSelected':
-                await sendNodeStats(message.path);
-                break;
+        if (!sidebarView) {
+            disposeWatchers();
         }
     }, null, context.subscriptions);
+    registerWebviewMessageHandlers(panel.webview);
     refreshTree();
 }
 async function refreshTree() {
-    if (!panel) {
+    if (!panel && !sidebarView) {
         return;
     }
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {
-        panel.webview.postMessage({ type: 'status', text: 'Open a workspace folder to use Showy.' });
+        postToWebviews({ type: 'status', text: 'Open a workspace folder to use Showy.' });
         return;
     }
     disposeWatchers();
@@ -103,8 +105,8 @@ async function refreshTree() {
         watcher.onDidDelete(scheduleRefresh, null);
         watchers.push(watcher);
     }
-    panel.webview.postMessage({ type: 'treeData', tree: rootNodes });
-    panel.webview.postMessage({ type: 'status', text: 'Project tree loaded.' });
+    postToWebviews({ type: 'treeData', tree: rootNodes });
+    postToWebviews({ type: 'status', text: 'Project tree loaded.' });
     // Build dependency graph asynchronously (non-blocking)
     if (getConfig('showDependencies') !== false && rootNodes.length > 0) {
         try {
@@ -118,7 +120,7 @@ async function refreshTree() {
                     averageDependenciesPerFile: Array.from(graph.nodes.values()).reduce((sum, node) => sum + node.dependencies.length, 0) / Math.max(graph.nodes.size, 1),
                 }
             };
-            panel.webview.postMessage({ type: 'graphData', graph: graphData });
+            postToWebviews({ type: 'graphData', graph: graphData });
         }
         catch (error) {
             console.error('Failed to build dependency graph:', error);
@@ -141,6 +143,51 @@ function disposeWatchers() {
     if (refreshTimer) {
         clearTimeout(refreshTimer);
         refreshTimer = undefined;
+    }
+}
+function postToWebviews(message) {
+    if (panel) {
+        panel.webview.postMessage(message);
+    }
+    if (sidebarView) {
+        sidebarView.webview.postMessage(message);
+    }
+}
+function registerWebviewMessageHandlers(webview) {
+    webview.onDidReceiveMessage(async (message) => {
+        await handleWebviewMessage(message);
+    });
+}
+async function handleWebviewMessage(message) {
+    switch (message.command) {
+        case 'ready':
+        case 'refresh':
+            await refreshTree();
+            break;
+        case 'nodeSelected':
+            await sendNodeStats(message.path);
+            break;
+    }
+}
+class ShowySidebarProvider {
+    constructor(context) {
+        this.context = context;
+    }
+    resolveWebviewView(webviewView) {
+        sidebarView = webviewView;
+        webviewView.webview.options = {
+            enableScripts: true,
+            localResourceRoots: [vscode.Uri.file(path.join(this.context.extensionPath, 'media'))]
+        };
+        webviewView.webview.html = getWebviewContent(webviewView.webview);
+        registerWebviewMessageHandlers(webviewView.webview);
+        webviewView.onDidDispose(() => {
+            sidebarView = undefined;
+            if (!panel) {
+                disposeWatchers();
+            }
+        }, null, this.context.subscriptions);
+        refreshTree();
     }
 }
 async function getLineCount(filePath) {
