@@ -40,6 +40,7 @@ const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const child_process_1 = require("child_process");
 const dependencyScanner_1 = require("./dependencyScanner");
+const dependencyGraph_1 = require("./dependencyGraph");
 let panel;
 let watchers = [];
 let refreshTimer;
@@ -104,6 +105,25 @@ async function refreshTree() {
     }
     panel.webview.postMessage({ type: 'treeData', tree: rootNodes });
     panel.webview.postMessage({ type: 'status', text: 'Project tree loaded.' });
+    // Build dependency graph asynchronously (non-blocking)
+    if (getConfig('showDependencies') !== false && rootNodes.length > 0) {
+        try {
+            const graph = await (0, dependencyGraph_1.buildDependencyGraph)(rootNodes[0]);
+            // Convert Map to serializable format for webview
+            const graphData = {
+                nodes: Array.from(graph.nodes.values()),
+                stats: {
+                    totalFiles: graph.nodes.size,
+                    totalDependencies: Array.from(graph.nodes.values()).reduce((sum, node) => sum + node.dependencies.length, 0),
+                    averageDependenciesPerFile: Array.from(graph.nodes.values()).reduce((sum, node) => sum + node.dependencies.length, 0) / Math.max(graph.nodes.size, 1),
+                }
+            };
+            panel.webview.postMessage({ type: 'graphData', graph: graphData });
+        }
+        catch (error) {
+            console.error('Failed to build dependency graph:', error);
+        }
+    }
 }
 function scheduleRefresh() {
     if (refreshTimer) {
@@ -351,46 +371,119 @@ function getWebviewContent(webview) {
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}'; style-src 'nonce-${nonce}';" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} https: data:; script-src 'nonce-${nonce}' https://d3js.org https://cdn.jsdelivr.net; style-src 'nonce-${nonce}'; connect-src https:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Showy Project Map</title>
+  <script nonce="${nonce}" src="https://d3js.org/d3.v7.min.js"></script>
   <style nonce="${nonce}">
     :root {
       color-scheme: light dark;
       font-family: Segoe UI, sans-serif;
     }
+    * {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
       padding: 0;
       display: grid;
-      grid-template-columns: 1.4fr 0.9fr;
+      grid-template-rows: auto 1fr;
+      grid-template-columns: 1fr 1fr 0.8fr;
       height: 100vh;
       overflow: hidden;
       gap: 0;
     }
     header {
+      grid-column: 1 / -1;
       padding: 12px 16px;
       background: #1e1e1e;
       color: white;
-      grid-column: 1 / -1;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
     }
     header button {
       background: #0e639c;
       border: none;
       color: white;
-      padding: 8px 14px;
-      border-radius: 4px;
+      padding: 6px 12px;
+      border-radius: 3px;
       cursor: pointer;
       font-weight: 600;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    header button:hover {
+      background: #1177bb;
+    }
+    .view-tabs {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .view-tabs button {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #d4d4d4;
+      padding: 4px 10px;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .view-tabs button.active {
+      background: #0e639c;
+      border-color: #0e639c;
+      color: white;
     }
     #tree-container {
       overflow: auto;
       padding: 16px;
       background: #252526;
       color: #d4d4d4;
+      display: none;
+    }
+    #tree-container.active {
+      display: block;
+    }
+    #graph-container {
+      background: #252526;
+      display: none;
+      position: relative;
+      overflow: hidden;
+    }
+    #graph-container.active {
+      display: block;
+    }
+    #graph-svg {
+      width: 100%;
+      height: 100%;
+    }
+    .node {
+      cursor: pointer;
+      stroke: rgba(255,255,255,0.2);
+      stroke-width: 1.5px;
+    }
+    .node:hover {
+      stroke: rgba(255,255,255,0.8);
+      stroke-width: 2px;
+    }
+    .link {
+      stroke: rgba(100,150,200,0.4);
+      stroke-width: 1px;
+    }
+    .node-label {
+      font-size: 11px;
+      fill: #d4d4d4;
+      text-anchor: middle;
+      pointer-events: none;
+      user-select: none;
     }
     #details {
       padding: 16px;
@@ -398,6 +491,26 @@ function getWebviewContent(webview) {
       background: #1e1e1e;
       color: #d4d4d4;
       overflow: auto;
+    }
+    #details h2 {
+      margin-top: 0;
+      font-size: 14px;
+    }
+    #details h3 {
+      font-size: 12px;
+      margin: 12px 0 6px 0;
+      color: #9cdcfe;
+    }
+    #details p {
+      font-size: 12px;
+      margin: 4px 0;
+      word-break: break-all;
+    }
+    #status {
+      padding: 8px 16px;
+      color: #9cdcfe;
+      font-size: 11px;
+      background: rgba(0,0,0,0.3);
     }
     ul.tree {
       list-style: none;
@@ -410,6 +523,7 @@ function getWebviewContent(webview) {
       display: flex;
       align-items: center;
       gap: 8px;
+      font-size: 12px;
     }
     li.node .label {
       cursor: pointer;
@@ -441,45 +555,74 @@ function getWebviewContent(webview) {
       color: #9cdcfe;
       font-size: 0.9rem;
     }
-    #details h2 {
-      margin-top: 0;
-    }
-    #status {
-      padding: 0 16px 12px;
-      color: #9cdcfe;
-      font-size: 0.9rem;
-    }
     pre {
       background: rgba(255,255,255,0.04);
-      padding: 12px;
-      border-radius: 6px;
+      padding: 8px;
+      border-radius: 4px;
       overflow: auto;
+      font-size: 11px;
+      margin: 0;
     }
   </style>
 </head>
 <body>
   <header>
-    <span>Showy Project Map</span>
+    <h1>🌳 Showy Project Map</h1>
+    <div class="view-tabs">
+      <button id="treeViewBtn" class="active">Tree</button>
+      <button id="graphViewBtn">Graph</button>
+    </div>
     <button id="refreshButton">Refresh</button>
   </header>
-  <div id="tree-container">
+  <div id="tree-container" class="active">
     <div id="status">Loading workspace tree...</div>
     <div id="tree"></div>
   </div>
+  <div id="graph-container">
+    <svg id="graph-svg"></svg>
+  </div>
   <div id="details">
-    <h2>Node Details</h2>
-    <div id="detailContent">Select a file or folder to see stats.</div>
+    <h2>Details</h2>
+    <div id="detailContent">Select a file or node to see details.</div>
   </div>
   <script nonce="${nonce}">
     const vscode = acquireVsCodeApi();
     const treeRoot = document.getElementById('tree');
+    const graphContainer = document.getElementById('graph-container');
     const detailContent = document.getElementById('detailContent');
     const statusBar = document.getElementById('status');
     const refreshButton = document.getElementById('refreshButton');
+    const treeViewBtn = document.getElementById('treeViewBtn');
+    const graphViewBtn = document.getElementById('graphViewBtn');
+    const treeContainer = document.getElementById('tree-container');
+    
+    let currentGraphData = null;
+    let d3Available = typeof d3 !== 'undefined';
+
+    treeViewBtn.addEventListener('click', () => {
+      treeContainer.classList.add('active');
+      graphContainer.classList.remove('active');
+      treeViewBtn.classList.add('active');
+      graphViewBtn.classList.remove('active');
+    });
+
+    graphViewBtn.addEventListener('click', () => {
+      if (!currentGraphData) {
+        alert('Graph data not yet loaded. Please wait for tree to load.');
+        return;
+      }
+      treeContainer.classList.remove('active');
+      graphContainer.classList.add('active');
+      treeViewBtn.classList.remove('active');
+      graphViewBtn.classList.add('active');
+      renderGraph();
+    });
 
     refreshButton.addEventListener('click', () => {
       vscode.postMessage({ command: 'refresh' });
       statusBar.textContent = 'Refreshing project tree...';
+      currentGraphData = null;
+      graphContainer.innerHTML = '<svg id="graph-svg"></svg>';
     });
 
     window.addEventListener('message', event => {
@@ -487,6 +630,10 @@ function getWebviewContent(webview) {
       switch (message.type) {
         case 'treeData':
           renderTree(message.tree);
+          break;
+        case 'graphData':
+          currentGraphData = message.graph;
+          statusBar.textContent = 'Graph loaded: ' + currentGraphData.stats.totalFiles + ' files, ' + currentGraphData.stats.totalDependencies + ' dependencies.';
           break;
         case 'nodeStats':
           showStats(message.stats);
@@ -550,23 +697,189 @@ function getWebviewContent(webview) {
       return item;
     }
 
+    function renderGraph() {
+      if (!currentGraphData || !d3Available) {
+        detailContent.innerHTML = '<p>Graph data not available or D3.js not loaded.</p>';
+        return;
+      }
+
+      const container = document.getElementById('graph-svg');
+      const width = graphContainer.clientWidth;
+      const height = graphContainer.clientHeight;
+
+      // Clear previous content
+      d3.select(container).selectAll('*').remove();
+
+      // Build D3 nodes and links
+      const nodes = currentGraphData.nodes.map((n, i) => ({
+        id: n.id,
+        path: n.path,
+        label: n.path.split('/').pop() || n.path,
+        index: i
+      }));
+
+      const links = [];
+      for (const node of currentGraphData.nodes) {
+        for (const depPath of node.dependencies) {
+          const targetNode = nodes.find(n => n.path === depPath);
+          if (targetNode) {
+            links.push({
+              source: node.id,
+              target: targetNode.id,
+              sourceNode: node,
+              targetNode: targetNode
+            });
+          }
+        }
+      }
+
+      // Create SVG
+      const svg = d3.select(container)
+        .attr('width', width)
+        .attr('height', height)
+        .attr('style', 'background: #252526;');
+
+      // Create force simulation
+      const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links)
+          .id(d => d.id)
+          .distance(80)
+          .strength(0.3))
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collide', d3.forceCollide(30));
+
+      // Draw links
+      const link = svg.append('g')
+        .selectAll('line')
+        .data(links)
+        .join('line')
+        .attr('class', 'link')
+        .attr('stroke', 'rgba(100,150,200,0.3)')
+        .attr('stroke-width', 1);
+
+      // Draw nodes
+      const node = svg.append('g')
+        .selectAll('circle')
+        .data(nodes)
+        .join('circle')
+        .attr('class', 'node')
+        .attr('r', 8)
+        .attr('fill', d => {
+          const depCount = currentGraphData.nodes.find(n => n.id === d.id).dependencies.length;
+          if (depCount === 0) return '#6a9fb5';
+          if (depCount > 5) return '#d94949';
+          return '#b8a538';
+        })
+        .call(drag(simulation));
+
+      // Draw labels
+      const label = svg.append('g')
+        .selectAll('text')
+        .data(nodes)
+        .join('text')
+        .attr('class', 'node-label')
+        .attr('font-size', '10px')
+        .text(d => d.label)
+        .call(drag(simulation));
+
+      node.on('click', (event, d) => {
+        const nodeData = currentGraphData.nodes.find(n => n.id === d.id);
+        if (nodeData) {
+          vscode.postMessage({ command: 'nodeSelected', path: nodeData.path });
+        }
+      });
+
+      simulation.on('tick', () => {
+        link
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => d.target.x)
+          .attr('y2', d => d.target.y);
+
+        node
+          .attr('cx', d => d.x)
+          .attr('cy', d => d.y);
+
+        label
+          .attr('x', d => d.x)
+          .attr('y', d => d.y - 12);
+      });
+
+      function drag(simulation) {
+        function dragstarted(event, d) {
+          if (!event.active) simulation.alphaTarget(0.3).restart();
+          d.fx = d.x;
+          d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+          d.fx = event.x;
+          d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+          if (!event.active) simulation.alphaTarget(0);
+          d.fx = null;
+          d.fy = null;
+        }
+
+        return d3.drag()
+          .on('start', dragstarted)
+          .on('drag', dragged)
+          .on('end', dragended);
+      }
+    }
+
     function showStats(stats) {
       const createdAt = stats.createdAt ? new Date(stats.createdAt).toLocaleString() : 'N/A';
       const modifiedAt = stats.modifiedAt ? new Date(stats.modifiedAt).toLocaleString() : 'N/A';
-      let html = '';
+      let html = '<div>';
       html += '<p><strong>Path:</strong> ' + escapeHtml(stats.path) + '</p>';
       html += '<p><strong>Type:</strong> ' + escapeHtml(stats.type) + '</p>';
+      
       if (stats.size != null) {
-        html += '<p><strong>Size:</strong> ' + stats.size + ' bytes</p>';
+        html += '<p><strong>Size:</strong> ' + formatBytes(stats.size) + '</p>';
       }
-      html += '<p><strong>Last Modified:</strong> ' + modifiedAt + '</p>';
+      
+      if (stats.lineCount != null && stats.lineCount > 0) {
+        html += '<p><strong>Lines:</strong> ' + stats.lineCount + '</p>';
+      }
+      
+      html += '<p><strong>Modified:</strong> ' + modifiedAt + '</p>';
       html += '<p><strong>Created:</strong> ' + createdAt + '</p>';
+      
       if (stats.childCount != null) {
         html += '<p><strong>Children:</strong> ' + stats.childCount + '</p>';
       }
-      html += '<h3>Raw JSON</h3>';
-      html += '<pre>' + escapeHtml(JSON.stringify(stats, null, 2)) + '</pre>';
+
+      if (stats.gitInfo) {
+        html += '<h3>Git Info</h3>';
+        html += '<p><strong>Author:</strong> ' + escapeHtml(stats.gitInfo.author) + '</p>';
+        html += '<p><strong>Commits:</strong> ' + stats.gitInfo.commitCount + '</p>';
+        html += '<p><strong>Last Modified:</strong> ' + escapeHtml(stats.gitInfo.lastModified) + '</p>';
+      }
+
+      if (stats.dependencies && Object.keys(stats.dependencies).length > 0) {
+        html += '<h3>Dependencies (' + Object.keys(stats.dependencies).length + ')</h3>';
+        html += '<pre>' + escapeHtml(JSON.stringify(stats.dependencies, null, 2)) + '</pre>';
+      }
+
+      if (stats.preview) {
+        html += '<h3>Preview</h3>';
+        html += '<pre>' + escapeHtml(stats.preview) + '</pre>';
+      }
+
+      html += '</div>';
       detailContent.innerHTML = html;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
 
     function escapeHtml(unsafe) {

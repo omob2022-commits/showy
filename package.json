@@ -18,9 +18,19 @@
     "commands": [
       {
         "command": "showy.openProjectMap",
-        "title": "Showy: Open Project Map"
+        "title": "Showy: Open Project Map",
+        "icon": "$(graph)"
       }
     ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "showy.openProjectMap",
+          "group": "navigation",
+          "when": "resourceScheme == file"
+        }
+      ]
+    },
     "configuration": {
       "title": "Showy",
       "properties": {
