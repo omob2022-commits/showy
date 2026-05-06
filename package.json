@@ -1,10 +1,11 @@
 {
   "name": "showy",
   "displayName": "Showy",
-  "description": "Visualize workspace folders and files as an interactive tree in VS Code.",
-  "version": "0.1.0",
+  "description": "Interactive project visualizer with dependency graphs, circular dependency detection, and git insights.",
+  "version": "0.1.1",
   "publisher": "omob-publish",
   "license": "MIT",
+  "icon": "showy-logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/omob2022-commits/showy.git"

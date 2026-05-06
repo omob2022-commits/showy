@@ -2,6 +2,11 @@
 
 All notable changes to the "Showy" extension will be documented in this file.
 
+## [0.1.1] - 2026-05-06
+
+### Changed
+- Improved extension description to better highlight key features
+
 ## [0.1.0] - 2026-05-06
 
 ### Added
