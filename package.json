@@ -3,7 +3,7 @@
   "displayName": "Showy",
   "description": "Visualize workspace folders and files as an interactive tree in VS Code.",
   "version": "0.1.0",
-  "publisher": "omob2022-commits",
+  "publisher": "omob-publish",
   "license": "MIT",
   "repository": {
     "type": "git",
