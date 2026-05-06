@@ -2,336 +2,290 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}} https: data:; script-src 'nonce-{{nonce}}' https://d3js.org https://cdn.jsdelivr.net; style-src 'nonce-{{nonce}}'; connect-src https:;" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}} https: data:; script-src 'nonce-{{nonce}}' https://d3js.org; style-src 'nonce-{{nonce}}'; connect-src https:;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Showy Project Map</title>
   <script nonce="{{nonce}}" src="https://d3js.org/d3.v7.min.js"></script>
   <style nonce="{{nonce}}">
     :root {
       color-scheme: light dark;
-      font-family: Segoe UI, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      --bg-primary: #1e1e1e;
+      --bg-secondary: #252526;
+      --bg-tertiary: #2d2d30;
+      --text-primary: #cccccc;
+      --text-secondary: #9cdcfe;
+      --accent-blue: #0e639c;
+      --accent-blue-hover: #1177bb;
+      --border-color: rgba(255,255,255,0.1);
     }
     * {
       box-sizing: border-box;
-    }
-    body {
       margin: 0;
       padding: 0;
-      display: grid;
-      grid-template-rows: auto 1fr;
-      grid-template-columns: 1fr 1fr 0.8fr;
+    }
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
       height: 100vh;
       overflow: hidden;
-      gap: 0;
+      display: flex;
+      flex-direction: column;
     }
     header {
-      grid-column: 1 / -1;
-      padding: 12px 16px;
-      background: #1e1e1e;
-      color: white;
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      flex-shrink: 0;
     }
-    header h1 {
-      margin: 0;
-      font-size: 14px;
+    h1 {
+      font-size: 16px;
       font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
-    header button {
-      background: #0e639c;
+    .logo {
+      font-size: 20px;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    button {
+      background: var(--accent-blue);
       border: none;
       color: white;
-      padding: 6px 12px;
-      border-radius: 3px;
+      padding: 6px 14px;
+      border-radius: 4px;
       cursor: pointer;
-      font-weight: 600;
-      font-size: 12px;
-      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.2s;
     }
-    header button:hover {
-      background: #1177bb;
+    button:hover {
+      background: var(--accent-blue-hover);
     }
-    .view-tabs {
-      display: flex;
-      gap: 4px;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-    .view-tabs button {
+    button.secondary {
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
-      color: #d4d4d4;
-      padding: 4px 10px;
-      font-size: 11px;
-      cursor: pointer;
-      border-radius: 2px;
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
     }
-    .view-tabs button.active {
-      background: #0e639c;
-      border-color: #0e639c;
-      color: white;
+    button.secondary:hover {
+      background: var(--bg-tertiary);
     }
-    #tree-container {
-      overflow: auto;
-      padding: 16px;
-      background: #252526;
-      color: #d4d4d4;
-      display: none;
-    }
-    #tree-container.active {
-      display: block;
-    }
-    #graph-container {
-      background: #252526;
-      display: none;
-      position: relative;
+    .main-container {
+      display: flex;
+      flex: 1;
       overflow: hidden;
     }
-    #graph-container.active {
-      display: block;
+    #visualization {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      background: var(--bg-secondary);
     }
-    #graph-svg {
+    #tree-svg {
       width: 100%;
       height: 100%;
     }
-    .node {
-      cursor: pointer;
-      stroke: rgba(255,255,255,0.2);
-      stroke-width: 1.5px;
+    #details-panel {
+      width: 320px;
+      background: var(--bg-primary);
+      border-left: 1px solid var(--border-color);
+      overflow-y: auto;
+      padding: 20px;
+      flex-shrink: 0;
     }
-    .node:hover {
-      stroke: rgba(255,255,255,0.8);
-      stroke-width: 2px;
-    }
-    .link {
-      stroke: rgba(100,150,200,0.4);
-      stroke-width: 1px;
-    }
-    .node-label {
-      font-size: 11px;
-      fill: #d4d4d4;
-      text-anchor: middle;
-      pointer-events: none;
-      user-select: none;
-    }
-    #details {
-      padding: 16px;
-      border-left: 1px solid rgba(255,255,255,0.08);
-      background: #1e1e1e;
-      color: #d4d4d4;
-      overflow: auto;
-    }
-    #details h2 {
-      margin-top: 0;
+    #details-panel h2 {
       font-size: 14px;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
     }
-    #details h3 {
+    .detail-section {
+      margin-bottom: 20px;
+    }
+    .detail-section h3 {
       font-size: 12px;
-      margin: 12px 0 6px 0;
-      color: #9cdcfe;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    #details p {
-      font-size: 12px;
-      margin: 4px 0;
-      word-break: break-all;
-    }
-    #status {
-      padding: 8px 16px;
-      color: #9cdcfe;
-      font-size: 11px;
-      background: rgba(0,0,0,0.3);
-    }
-    ul.tree {
-      list-style: none;
-      padding-left: 18px;
-      margin: 0;
-    }
-    li.node {
-      margin: 4px 0;
-      line-height: 1.5;
+    .detail-row {
       display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 13px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    li.node .label {
-      cursor: pointer;
-      user-select: none;
-      padding: 4px 6px;
-      border-radius: 4px;
+    .detail-label {
+      color: #888;
     }
-    li.node .label:hover {
-      background: rgba(255,255,255,0.08);
-    }
-    li.node.folder > .label::before {
-      content: '▸';
-      display: inline-block;
-      width: 16px;
-      transform: rotate(0deg);
-      transition: transform 0.2s ease;
-    }
-    li.node.expanded > .label::before {
-      transform: rotate(90deg);
-    }
-    li.node.folder > ul {
-      display: none;
-      margin-left: 14px;
-    }
-    li.node.expanded > ul {
-      display: block;
-    }
-    .node-meta {
-      color: #9cdcfe;
-      font-size: 0.9rem;
-    }
-    pre {
-      background: rgba(255,255,255,0.04);
-      padding: 8px;
-      border-radius: 4px;
-      overflow: auto;
-      font-size: 11px;
-      margin: 0;
+    .detail-value {
+      color: var(--text-primary);
+      text-align: right;
+      word-break: break-all;
     }
     .dep-list {
       list-style: none;
-      padding: 0;
-      margin: 0;
+      margin-top: 8px;
     }
-    .dep-list li {
-      font-size: 11px;
-      padding: 3px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .dep-list li:last-child {
-      border-bottom: none;
+    .dep-item {
+      padding: 8px;
+      margin: 4px 0;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      font-size: 12px;
+      font-family: 'Consolas', 'Monaco', monospace;
     }
     .dep-import {
-      color: #9cdcfe;
-      font-family: monospace;
+      color: var(--text-secondary);
+      display: block;
+      margin-bottom: 4px;
     }
     .dep-resolved {
       color: #6a9955;
-      font-size: 10px;
-      word-break: break-all;
+      font-size: 11px;
     }
     .dep-unresolved {
-      color: #808080;
-      font-size: 10px;
+      color: #888;
+      font-size: 11px;
       font-style: italic;
     }
-    .graph-legend {
-      position: absolute;
-      bottom: 12px;
-      left: 12px;
-      background: rgba(30,30,30,0.85);
-      border: 1px solid rgba(255,255,255,0.1);
+    .circular-warning {
+      background: rgba(217, 73, 73, 0.1);
+      border-left: 3px solid #d94949;
+      padding: 12px;
+      margin: 8px 0;
       border-radius: 4px;
-      padding: 8px 12px;
-      font-size: 11px;
-      color: #d4d4d4;
-      pointer-events: none;
+      font-size: 12px;
     }
-    .graph-legend-item {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin: 3px 0;
+    .circular-warning-title {
+      color: #d94949;
+      font-weight: 600;
+      margin-bottom: 8px;
     }
-    .graph-legend-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
+    .status-bar {
+      padding: 8px 20px;
+      background: var(--bg-tertiary);
+      border-top: 1px solid var(--border-color);
+      font-size: 12px;
+      color: #888;
       flex-shrink: 0;
+    }
+    .node-circle {
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .node-circle:hover {
+      stroke: rgba(255,255,255,0.8);
+      stroke-width: 3px;
+    }
+    .node-label {
+      font-size: 11px;
+      fill: var(--text-primary);
+      pointer-events: none;
+      user-select: none;
+    }
+    .link-line {
+      stroke: rgba(100,150,200,0.3);
+      stroke-width: 1.5px;
+      fill: none;
+    }
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #888;
+      text-align: center;
+      padding: 40px;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+    .empty-state-text {
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+    .empty-state-subtext {
+      font-size: 12px;
+      color: #666;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>🌳 Showy Project Map</h1>
-    <div class="view-tabs">
-      <button id="treeViewBtn" class="active">Tree</button>
-      <button id="graphViewBtn">Graph</button>
+    <h1><span class="logo">🌳</span> Showy</h1>
+    <div class="controls">
+      <button id="refreshBtn">Refresh</button>
     </div>
-    <button id="refreshButton">Refresh</button>
   </header>
-  <div id="tree-container" class="active">
-    <div id="status">Loading workspace tree...</div>
-    <div id="tree"></div>
-  </div>
-  <div id="graph-container">
-    <svg id="graph-svg"></svg>
-    <div class="graph-legend">
-      <div class="graph-legend-item"><div class="graph-legend-dot" style="background:#6a9fb5"></div> No dependencies</div>
-      <div class="graph-legend-item"><div class="graph-legend-dot" style="background:#b8a538"></div> Some dependencies</div>
-      <div class="graph-legend-item"><div class="graph-legend-dot" style="background:#d94949"></div> Many dependencies (&gt;5)</div>
+  
+  <div class="main-container">
+    <div id="visualization">
+      <svg id="tree-svg"></svg>
+    </div>
+    
+    <div id="details-panel">
+      <h2>Details</h2>
+      <div id="details-content">
+        <div class="empty-state">
+          <div class="empty-state-icon">📄</div>
+          <div class="empty-state-text">Select a file to see details</div>
+          <div class="empty-state-subtext">Click on any node in the tree</div>
+        </div>
+      </div>
     </div>
   </div>
-  <div id="details">
-    <h2>Details</h2>
-    <div id="detailContent">Select a file or node to see details.</div>
-  </div>
+  
+  <div class="status-bar" id="statusBar">Loading project tree...</div>
+
   <script nonce="{{nonce}}">
     const vscode = acquireVsCodeApi();
-    const treeRoot = document.getElementById('tree');
-    const graphContainer = document.getElementById('graph-container');
-    const graphSvg = document.getElementById('graph-svg');
-    const detailContent = document.getElementById('detailContent');
-    const statusBar = document.getElementById('status');
-    const refreshButton = document.getElementById('refreshButton');
-    const treeViewBtn = document.getElementById('treeViewBtn');
-    const graphViewBtn = document.getElementById('graphViewBtn');
-    const treeContainer = document.getElementById('tree-container');
-
-    let currentGraphData = null;
+    const svg = d3.select('#tree-svg');
+    const detailsContent = document.getElementById('details-content');
+    const statusBar = document.getElementById('statusBar');
+    const refreshBtn = document.getElementById('refreshBtn');
+    
+    let treeData = null;
     let circularDeps = [];
-    let d3Available = typeof d3 !== 'undefined';
+    let root = null;
+    let treeLayout = null;
+    let g = null;
+    let zoom = null;
 
-    treeViewBtn.addEventListener('click', () => {
-      treeContainer.classList.add('active');
-      graphContainer.classList.remove('active');
-      treeViewBtn.classList.add('active');
-      graphViewBtn.classList.remove('active');
-    });
-
-    graphViewBtn.addEventListener('click', () => {
-      if (!currentGraphData) {
-        statusBar.textContent = '⚠️ Graph data not yet loaded. Please wait for tree to load.';
-        return;
-      }
-      treeContainer.classList.remove('active');
-      graphContainer.classList.add('active');
-      treeViewBtn.classList.remove('active');
-      graphViewBtn.classList.add('active');
-      renderGraph();
-    });
-
-    refreshButton.addEventListener('click', () => {
+    refreshBtn.addEventListener('click', () => {
       vscode.postMessage({ command: 'refresh' });
-      statusBar.textContent = 'Refreshing project tree...';
-      currentGraphData = null;
-      d3.select(graphSvg).selectAll('*').remove();
+      statusBar.textContent = 'Refreshing...';
     });
 
     window.addEventListener('message', event => {
       const message = event.data;
       switch (message.type) {
         case 'treeData':
-          renderTree(message.tree);
+          treeData = message.tree;
+          renderTree();
           break;
         case 'graphData':
-          currentGraphData = message.graph;
-          statusBar.textContent = 'Graph loaded: ' + currentGraphData.stats.totalFiles + ' files, ' + currentGraphData.stats.totalDependencies + ' dependencies.';
+          // Store for potential future use
           break;
         case 'circularDependencies':
           circularDeps = message.circles;
+          if (circularDeps.length > 0) {
+            statusBar.textContent = `⚠️ Found ${circularDeps.length} circular ${circularDeps.length === 1 ? 'dependency' : 'dependencies'}`;
+          }
           break;
         case 'nodeStats':
-          showStats(message.stats);
+          showDetails(message.stats);
           break;
         case 'status':
           statusBar.textContent = message.text;
@@ -341,285 +295,321 @@
 
     vscode.postMessage({ command: 'ready' });
 
-    function renderTree(nodes) {
-      treeRoot.innerHTML = '';
-      if (!Array.isArray(nodes) || nodes.length === 0) {
-        treeRoot.textContent = 'No workspace folders found.';
+    function renderTree() {
+      if (!treeData || treeData.length === 0) {
+        svg.html('<text x="50%" y="50%" text-anchor="middle" fill="#888">No workspace folder open</text>');
         return;
       }
-      const treeElement = document.createElement('ul');
-      treeElement.className = 'tree';
-      for (const node of nodes) {
-        treeElement.appendChild(createNodeElement(node));
-      }
-      treeRoot.appendChild(treeElement);
-    }
 
-    function createNodeElement(node) {
-      const item = document.createElement('li');
-      item.className = 'node ' + node.type;
+      const container = svg.node().parentElement;
+      const width = container.clientWidth;
+      const height = container.clientHeight;
 
-      const label = document.createElement('span');
-      label.className = 'label';
-      label.textContent = node.name;
-      label.title = node.path;
+      svg.selectAll('*').remove();
+      svg.attr('width', width).attr('height', height);
 
-      if (node.type === 'folder') {
-        const meta = document.createElement('span');
-        meta.className = 'node-meta';
-        meta.textContent = ' (' + (node.childCount ?? 0) + ' items)';
-        label.appendChild(meta);
-      }
+      // Merge all workspace folders into a single root
+      const mergedRoot = {
+        name: 'Workspace',
+        type: 'folder',
+        path: '',
+        children: treeData
+      };
 
-      label.addEventListener('click', () => {
-        if (node.type === 'folder') {
-          item.classList.toggle('expanded');
+      // Build hierarchy from tree data
+      root = d3.hierarchy(mergedRoot, d => d.children);
+      
+      // Collapse all children initially except first level
+      root.descendants().forEach(d => {
+        if (d.depth > 1 && d.children) {
+          d._children = d.children;
+          d.children = null;
         }
-        vscode.postMessage({ command: 'nodeSelected', path: node.path });
       });
+      
+      // Create tree layout
+      treeLayout = d3.tree()
+        .size([width - 100, height - 100])
+        .separation((a, b) => (a.parent === b.parent ? 1 : 1.2));
 
-      item.appendChild(label);
+      g = svg.append('g')
+        .attr('transform', 'translate(50, 50)');
 
-      if (node.children && node.children.length > 0) {
-        const childList = document.createElement('ul');
-        childList.className = 'tree';
-        for (const child of node.children) {
-          childList.appendChild(createNodeElement(child));
-        }
-        item.appendChild(childList);
+      // Add zoom behavior (only once)
+      if (!zoom) {
+        zoom = d3.zoom()
+          .scaleExtent([0.1, 3])
+          .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+          });
+        svg.call(zoom);
       }
 
-      return item;
+      updateTree(root);
     }
 
-    function renderGraph() {
-      if (!currentGraphData || !d3Available) {
-        detailContent.innerHTML = '<p>Graph data not available or D3.js not loaded.</p>';
-        return;
-      }
+    function updateTree(source) {
+      if (!root || !treeLayout || !g) return;
 
-      const width = graphContainer.clientWidth;
-      const height = graphContainer.clientHeight;
+      const duration = 300;
 
-      d3.select(graphSvg).selectAll('*').remove();
+      // Compute the new tree layout
+      treeLayout(root);
 
-      const nodes = currentGraphData.nodes.map((n, i) => ({
-        id: n.id,
-        path: n.path,
-        label: n.path.split('/').pop() || n.path,
-        index: i
-      }));
+      const nodes = root.descendants();
+      const links = root.links();
 
-      const links = [];
-      for (const node of currentGraphData.nodes) {
-        for (const depPath of node.dependencies) {
-          const targetNode = nodes.find(n => n.path === depPath);
-          if (targetNode) {
-            links.push({
-              source: node.id,
-              target: targetNode.id,
-            });
+      // Update links
+      const link = g.selectAll('.link-line')
+        .data(links, d => d.target.id || (d.target.id = ++i));
+
+      link.exit().transition().duration(duration)
+        .attr('opacity', 0)
+        .remove();
+
+      const linkEnter = link.enter().append('path')
+        .attr('class', 'link-line')
+        .attr('opacity', 0);
+
+      link.merge(linkEnter)
+        .transition().duration(duration)
+        .attr('opacity', 1)
+        .attr('d', d3.linkVertical()
+          .x(d => d.x)
+          .y(d => d.y));
+
+      // Update nodes
+      const node = g.selectAll('.node-group')
+        .data(nodes, d => d.id || (d.id = ++i));
+
+      node.exit().transition().duration(duration)
+        .attr('opacity', 0)
+        .remove();
+
+      const nodeEnter = node.enter().append('g')
+        .attr('class', 'node-group')
+        .attr('transform', d => `translate(${d.x},${d.y})`)
+        .attr('opacity', 0);
+
+      nodeEnter.append('circle')
+        .attr('class', 'node-circle')
+        .attr('r', d => d.data.type === 'folder' ? 8 : 6)
+        .attr('fill', d => getNodeColor(d))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .style('cursor', 'pointer')
+        .on('click', (event, d) => {
+          if (d.data.type === 'folder') {
+            if (d._children) {
+              d.children = d._children;
+              d._children = null;
+            } else if (d.children) {
+              d._children = d.children;
+              d.children = null;
+            }
+            updateTree(d);
           }
-        }
-      }
+          if (d.data.path) {
+            vscode.postMessage({ command: 'nodeSelected', path: d.data.path });
+          }
+        });
 
-      const svg = d3.select(graphSvg)
-        .attr('width', width)
-        .attr('height', height)
-        .attr('style', 'background: #252526;');
-
-      const simulation = d3.forceSimulation(nodes)
-        .force('link', d3.forceLink(links)
-          .id(d => d.id)
-          .distance(80)
-          .strength(0.3))
-        .force('charge', d3.forceManyBody().strength(-200))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collide', d3.forceCollide(30));
-
-      const link = svg.append('g')
-        .selectAll('line')
-        .data(links)
-        .join('line')
-        .attr('class', 'link')
-        .attr('stroke', 'rgba(100,150,200,0.3)')
-        .attr('stroke-width', 1);
-
-      const node = svg.append('g')
-        .selectAll('circle')
-        .data(nodes)
-        .join('circle')
-        .attr('class', 'node')
-        .attr('r', 8)
-        .attr('fill', d => {
-          const depCount = currentGraphData.nodes.find(n => n.id === d.id).dependencies.length;
-          if (depCount === 0) return '#6a9fb5';
-          if (depCount > 5) return '#d94949';
-          return '#b8a538';
-        })
-        .call(drag(simulation));
-
-      const label = svg.append('g')
-        .selectAll('text')
-        .data(nodes)
-        .join('text')
+      nodeEnter.append('text')
         .attr('class', 'node-label')
+        .attr('dy', -12)
+        .attr('text-anchor', 'middle')
+        .text(d => d.data.name.length > 20 ? d.data.name.substring(0, 17) + '...' : d.data.name);
+
+      // Add expand/collapse indicator for folders
+      nodeEnter.filter(d => d.data.type === 'folder')
+        .append('text')
+        .attr('class', 'folder-indicator')
+        .attr('text-anchor', 'middle')
+        .attr('dy', 4)
         .attr('font-size', '10px')
-        .text(d => d.label)
-        .call(drag(simulation));
+        .attr('fill', '#fff')
+        .text(d => d._children ? '▶' : '▼');
 
-      node.on('click', (event, d) => {
-        const nodeData = currentGraphData.nodes.find(n => n.id === d.id);
-        if (nodeData) {
-          vscode.postMessage({ command: 'nodeSelected', path: nodeData.path });
-        }
-      });
+      const nodeUpdate = node.merge(nodeEnter);
 
-      simulation.on('tick', () => {
-        link
-          .attr('x1', d => d.source.x)
-          .attr('y1', d => d.source.y)
-          .attr('x2', d => d.target.x)
-          .attr('y2', d => d.target.y);
+      nodeUpdate.transition().duration(duration)
+        .attr('transform', d => `translate(${d.x},${d.y})`)
+        .attr('opacity', 1);
 
-        node
-          .attr('cx', d => d.x)
-          .attr('cy', d => d.y);
+      nodeUpdate.select('circle')
+        .attr('fill', d => getNodeColor(d));
 
-        label
-          .attr('x', d => d.x)
-          .attr('y', d => d.y - 12);
-      });
+      nodeUpdate.select('.folder-indicator')
+        .text(d => d._children ? '▶' : '▼');
 
-      function drag(simulation) {
-        function dragstarted(event, d) {
-          if (!event.active) simulation.alphaTarget(0.3).restart();
-          d.fx = d.x;
-          d.fy = d.y;
-        }
-        function dragged(event, d) {
-          d.fx = event.x;
-          d.fy = event.y;
-        }
-        function dragended(event, d) {
-          if (!event.active) simulation.alphaTarget(0);
-          d.fx = null;
-          d.fy = null;
-        }
-        return d3.drag()
-          .on('start', dragstarted)
-          .on('drag', dragged)
-          .on('end', dragended);
-      }
+      statusBar.textContent = `Showing ${nodes.length} items`;
     }
 
-    function showStats(stats) {
-      const container = document.createElement('div');
+    function getNodeColor(d) {
+      if (d.data.type === 'folder') {
+        return d._children ? '#4a7f95' : '#6a9fb5';
+      }
+      // Color based on file extension
+      const parts = d.data.name.split('.');
+      if (parts.length < 2) return '#b8a538'; // No extension
+      const ext = parts[parts.length - 1].toLowerCase();
+      if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return '#3178c6';
+      if (['py'].includes(ext)) return '#3776ab';
+      if (['cpp', 'c', 'h', 'hpp'].includes(ext)) return '#00599c';
+      return '#b8a538';
+    }
 
-      function addRow(label, value) {
-        const p = document.createElement('p');
-        const strong = document.createElement('strong');
-        strong.textContent = label + ': ';
-        p.appendChild(strong);
-        p.appendChild(document.createTextNode(value));
-        container.appendChild(p);
+    let i = 0; // For generating unique IDs
+
+    function showDetails(stats) {
+      detailsContent.innerHTML = '';
+
+      function addRow(container, label, value) {
+        const row = document.createElement('div');
+        row.className = 'detail-row';
+        
+        const labelSpan = document.createElement('span');
+        labelSpan.className = 'detail-label';
+        labelSpan.textContent = label;
+        
+        const valueSpan = document.createElement('span');
+        valueSpan.className = 'detail-value';
+        valueSpan.textContent = value;
+        
+        row.appendChild(labelSpan);
+        row.appendChild(valueSpan);
+        container.appendChild(row);
       }
 
-      addRow('Path', stats.path);
-      addRow('Type', stats.type);
+      // File Information Section
+      const fileSection = document.createElement('div');
+      fileSection.className = 'detail-section';
+      
+      const fileTitle = document.createElement('h3');
+      fileTitle.textContent = 'File Information';
+      fileSection.appendChild(fileTitle);
 
+      const fileName = stats.path.split(/[/\\]/).pop();
+      addRow(fileSection, 'Name', fileName);
+      addRow(fileSection, 'Type', stats.type);
+      
       if (stats.size != null) {
-        addRow('Size', formatBytes(stats.size));
+        addRow(fileSection, 'Size', formatBytes(stats.size));
       }
       if (stats.lineCount != null && stats.lineCount > 0) {
-        addRow('Lines', String(stats.lineCount));
+        addRow(fileSection, 'Lines', String(stats.lineCount));
       }
       if (stats.modifiedAt) {
-        addRow('Modified', new Date(stats.modifiedAt).toLocaleString());
+        addRow(fileSection, 'Modified', new Date(stats.modifiedAt).toLocaleDateString());
       }
-      if (stats.createdAt) {
-        addRow('Created', new Date(stats.createdAt).toLocaleString());
-      }
-      if (stats.childCount != null) {
-        addRow('Children', String(stats.childCount));
-      }
+      
+      detailsContent.appendChild(fileSection);
 
+      // Git Information Section
       if (stats.gitInfo) {
-        const h3 = document.createElement('h3');
-        h3.textContent = 'Git Info';
-        container.appendChild(h3);
-        addRow('Author', stats.gitInfo.author);
-        addRow('Commits', String(stats.gitInfo.commitCount));
-        addRow('Last Modified', stats.gitInfo.lastModified);
+        const gitSection = document.createElement('div');
+        gitSection.className = 'detail-section';
+        
+        const gitTitle = document.createElement('h3');
+        gitTitle.textContent = 'Git Information';
+        gitSection.appendChild(gitTitle);
+
+        addRow(gitSection, 'Author', stats.gitInfo.author);
+        addRow(gitSection, 'Commits', String(stats.gitInfo.commitCount));
+        
+        detailsContent.appendChild(gitSection);
       }
 
+      // Dependencies Section
       if (stats.dependencies && Object.keys(stats.dependencies).length > 0) {
-        const h3 = document.createElement('h3');
-        h3.textContent = 'Dependencies (' + Object.keys(stats.dependencies).length + ')';
-        container.appendChild(h3);
+        const depSection = document.createElement('div');
+        depSection.className = 'detail-section';
+        
+        const depTitle = document.createElement('h3');
+        depTitle.textContent = `Dependencies (${Object.keys(stats.dependencies).length})`;
+        depSection.appendChild(depTitle);
 
-        const ul = document.createElement('ul');
-        ul.className = 'dep-list';
+        const depList = document.createElement('ul');
+        depList.className = 'dep-list';
 
         for (const [importPath, resolvedPath] of Object.entries(stats.dependencies)) {
-          const li = document.createElement('li');
+          const depItem = document.createElement('li');
+          depItem.className = 'dep-item';
 
           const importSpan = document.createElement('span');
           importSpan.className = 'dep-import';
           importSpan.textContent = importPath;
-          li.appendChild(importSpan);
+          depItem.appendChild(importSpan);
 
           if (resolvedPath) {
             const resolvedSpan = document.createElement('span');
             resolvedSpan.className = 'dep-resolved';
-            resolvedSpan.textContent = '→ ' + resolvedPath;
-            li.appendChild(resolvedSpan);
+            resolvedSpan.textContent = '→ ' + resolvedPath.split(/[/\\]/).pop();
+            depItem.appendChild(resolvedSpan);
           } else {
             const unresolvedSpan = document.createElement('span');
             unresolvedSpan.className = 'dep-unresolved';
-            unresolvedSpan.textContent = 'external / unresolved';
-            li.appendChild(unresolvedSpan);
+            unresolvedSpan.textContent = 'external';
+            depItem.appendChild(unresolvedSpan);
           }
 
-          ul.appendChild(li);
+          depList.appendChild(depItem);
         }
-        container.appendChild(ul);
+
+        depSection.appendChild(depList);
+        detailsContent.appendChild(depSection);
       }
 
-      // Show circular dependencies if this file is involved in any
+      // Circular Dependencies Warning
       if (circularDeps.length > 0) {
         const involvedCycles = circularDeps.filter(cycle => cycle.includes(stats.path));
         if (involvedCycles.length > 0) {
-          const h3 = document.createElement('h3');
-          h3.textContent = '⚠️ Circular Dependencies (' + involvedCycles.length + ')';
-          h3.style.color = '#d94949';
-          container.appendChild(h3);
+          const circularSection = document.createElement('div');
+          circularSection.className = 'detail-section';
+
+          const warningDiv = document.createElement('div');
+          warningDiv.className = 'circular-warning';
+
+          const warningTitle = document.createElement('div');
+          warningTitle.className = 'circular-warning-title';
+          warningTitle.textContent = `⚠️ Circular Dependencies (${involvedCycles.length})`;
+          warningDiv.appendChild(warningTitle);
 
           for (const cycle of involvedCycles) {
             const cycleDiv = document.createElement('div');
+            cycleDiv.style.marginTop = '8px';
             cycleDiv.style.fontSize = '11px';
-            cycleDiv.style.padding = '6px';
-            cycleDiv.style.background = 'rgba(217, 73, 73, 0.1)';
-            cycleDiv.style.borderRadius = '4px';
-            cycleDiv.style.marginBottom = '6px';
-            cycleDiv.style.wordBreak = 'break-all';
-            cycleDiv.textContent = cycle.join(' → ') + ' → ' + cycle[0];
-            container.appendChild(cycleDiv);
+            cycleDiv.textContent = cycle.map(p => p.split(/[/\\]/).pop()).join(' → ');
+            warningDiv.appendChild(cycleDiv);
           }
+
+          circularSection.appendChild(warningDiv);
+          detailsContent.appendChild(circularSection);
         }
       }
 
+      // File Preview Section
       if (stats.preview) {
-        const h3 = document.createElement('h3');
-        h3.textContent = 'Preview';
-        container.appendChild(h3);
-        const pre = document.createElement('pre');
-        pre.textContent = stats.preview;
-        container.appendChild(pre);
-      }
+        const previewSection = document.createElement('div');
+        previewSection.className = 'detail-section';
+        
+        const previewTitle = document.createElement('h3');
+        previewTitle.textContent = 'Preview';
+        previewSection.appendChild(previewTitle);
 
-      detailContent.innerHTML = '';
-      detailContent.appendChild(container);
+        const previewPre = document.createElement('pre');
+        previewPre.style.background = 'var(--bg-tertiary)';
+        previewPre.style.padding = '12px';
+        previewPre.style.borderRadius = '4px';
+        previewPre.style.fontSize = '11px';
+        previewPre.style.overflow = 'auto';
+        previewPre.style.maxHeight = '200px';
+        previewPre.style.fontFamily = "'Consolas', 'Monaco', monospace";
+        previewPre.textContent = stats.preview;
+        
+        previewSection.appendChild(previewPre);
+        detailsContent.appendChild(previewSection);
+      }
     }
 
     function formatBytes(bytes) {
@@ -629,6 +619,25 @@
       const i = Math.floor(Math.log(bytes) / Math.log(k));
       return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     }
+
+    // Handle window resize
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (treeData && root) {
+          // Just update the tree layout size, don't rebuild everything
+          const container = svg.node().parentElement;
+          const width = container.clientWidth;
+          const height = container.clientHeight;
+          
+          svg.attr('width', width).attr('height', height);
+          
+          treeLayout.size([width - 100, height - 100]);
+          updateTree(root);
+        }
+      }, 250);
+    });
   </script>
 </body>
 </html>

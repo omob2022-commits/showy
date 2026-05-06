@@ -2,6 +2,25 @@
 
 All notable changes to the "Showy" extension will be documented in this file.
 
+## [0.2.0] - 2026-05-06
+
+### Changed
+- **Complete UI redesign** with modern, clean interface
+- **Hierarchical tree layout** - proper tree structure instead of scattered force graph
+- **Zoom and pan support** - navigate large projects easily
+- **Expand/collapse folders** - click folders to toggle children
+- **Multi-workspace support** - all workspace folders now render correctly
+- **File preview** - see file contents in details panel
+- **DOM-based rendering** - safer, XSS-resistant details panel
+- **Extension-aware coloring** - TypeScript (blue), Python (blue), C++ (navy), etc.
+- **Better status messages** - circular dependency warnings in status bar
+
+### Fixed
+- Sidebar "no data provider" error
+- Multi-root workspace rendering (was only showing first folder)
+- Windows path handling in file labels
+- Security improvements with DOM API instead of innerHTML
+
 ## [0.1.1] - 2026-05-06
 
 ### Changed
