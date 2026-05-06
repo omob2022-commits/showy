@@ -146,13 +146,13 @@ async function resolveDependencyPath(dependency, fromFile) {
     }
     try {
         if (language === 'javascript') {
-            return resolveJavaScriptDependency(dependency, fromDir);
+            return await resolveJavaScriptDependency(dependency, fromDir);
         }
         else if (language === 'python') {
-            return resolvePythonDependency(dependency, fromDir);
+            return await resolvePythonDependency(dependency, fromDir);
         }
         else if (language === 'cpp') {
-            return resolveCppDependency(dependency, fromDir);
+            return await resolveCppDependency(dependency, fromDir);
         }
     }
     catch (error) {

@@ -8,7 +8,18 @@
     "vscode": "^1.118.0"
   },
   "categories": [
-    "Other"
+    "Visualization"
+  ],
+  "keywords": [
+    "tree",
+    "dependency graph",
+    "visualization",
+    "project map",
+    "dependencies",
+    "circular dependencies",
+    "file explorer",
+    "graph",
+    "d3"
   ],
   "main": "./out/extension.js",
   "contributes": {
