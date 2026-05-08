@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "publisher": "omob-publish",
   "license": "MIT",
-  "icon": "showy-logo.png",
+  "icon": "media/showy-logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/omob2022-commits/showy.git"

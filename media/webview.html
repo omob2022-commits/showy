@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -19,11 +19,7 @@
       --accent-blue-hover: #1177bb;
       --border-color: rgba(255,255,255,0.1);
     }
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg-primary);
       color: var(--text-primary);
@@ -48,14 +44,8 @@
       align-items: center;
       gap: 10px;
     }
-    .logo {
-      font-size: 20px;
-    }
-    .controls {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
+    .logo { font-size: 20px; }
+    .controls { display: flex; gap: 8px; align-items: center; }
     button {
       background: var(--accent-blue);
       border: none;
@@ -67,32 +57,21 @@
       font-weight: 500;
       transition: background 0.2s;
     }
-    button:hover {
-      background: var(--accent-blue-hover);
-    }
+    button:hover { background: var(--accent-blue-hover); }
     button.secondary {
       background: transparent;
       border: 1px solid var(--border-color);
       color: var(--text-primary);
     }
-    button.secondary:hover {
-      background: var(--bg-tertiary);
-    }
-    .main-container {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
+    button.secondary:hover { background: var(--bg-tertiary); }
+    .main-container { display: flex; flex: 1; overflow: hidden; }
     #visualization {
       flex: 1;
       position: relative;
       overflow: hidden;
       background: var(--bg-secondary);
     }
-    #tree-svg {
-      width: 100%;
-      height: 100%;
-    }
+    #tree-svg { width: 100%; height: 100%; }
     #details-panel {
       width: 320px;
       background: var(--bg-primary);
@@ -106,9 +85,7 @@
       margin-bottom: 16px;
       color: var(--text-secondary);
     }
-    .detail-section {
-      margin-bottom: 20px;
-    }
+    .detail-section { margin-bottom: 20px; }
     .detail-section h3 {
       font-size: 12px;
       color: var(--text-secondary);
@@ -123,18 +100,9 @@
       font-size: 13px;
       border-bottom: 1px solid rgba(255,255,255,0.05);
     }
-    .detail-label {
-      color: #888;
-    }
-    .detail-value {
-      color: var(--text-primary);
-      text-align: right;
-      word-break: break-all;
-    }
-    .dep-list {
-      list-style: none;
-      margin-top: 8px;
-    }
+    .detail-label { color: #888; }
+    .detail-value { color: var(--text-primary); text-align: right; word-break: break-all; }
+    .dep-list { list-style: none; margin-top: 8px; }
     .dep-item {
       padding: 8px;
       margin: 4px 0;
@@ -143,33 +111,18 @@
       font-size: 12px;
       font-family: 'Consolas', 'Monaco', monospace;
     }
-    .dep-import {
-      color: var(--text-secondary);
-      display: block;
-      margin-bottom: 4px;
-    }
-    .dep-resolved {
-      color: #6a9955;
-      font-size: 11px;
-    }
-    .dep-unresolved {
-      color: #888;
-      font-size: 11px;
-      font-style: italic;
-    }
+    .dep-import { color: var(--text-secondary); display: block; margin-bottom: 4px; }
+    .dep-resolved { color: #6a9955; font-size: 11px; }
+    .dep-unresolved { color: #888; font-size: 11px; font-style: italic; }
     .circular-warning {
-      background: rgba(217, 73, 73, 0.1);
+      background: rgba(217,73,73,0.1);
       border-left: 3px solid #d94949;
       padding: 12px;
       margin: 8px 0;
       border-radius: 4px;
       font-size: 12px;
     }
-    .circular-warning-title {
-      color: #d94949;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
+    .circular-warning-title { color: #d94949; font-weight: 600; margin-bottom: 8px; }
     .status-bar {
       padding: 8px 20px;
       background: var(--bg-tertiary);
@@ -178,25 +131,20 @@
       color: #888;
       flex-shrink: 0;
     }
-    .node-circle {
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .node-circle:hover {
-      stroke: rgba(255,255,255,0.8);
-      stroke-width: 3px;
-    }
+    /* node-circle hover is on the group now, but keep for visual feedback */
+    .node-group { cursor: pointer; }
+    .node-group:hover circle { stroke: rgba(255,255,255,0.8); stroke-width: 3px; }
     .node-label {
       font-size: 11px;
       fill: var(--text-primary);
       pointer-events: none;
       user-select: none;
     }
-    .link-line {
-      stroke: rgba(100,150,200,0.3);
-      stroke-width: 1.5px;
-      fill: none;
+    .folder-indicator {
+      pointer-events: none; /* FIX: never block clicks on the group */
+      user-select: none;
     }
+    .link-line { stroke: rgba(100,150,200,0.3); stroke-width: 1.5px; fill: none; }
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -207,19 +155,9 @@
       text-align: center;
       padding: 40px;
     }
-    .empty-state-icon {
-      font-size: 48px;
-      margin-bottom: 16px;
-      opacity: 0.5;
-    }
-    .empty-state-text {
-      font-size: 14px;
-      margin-bottom: 8px;
-    }
-    .empty-state-subtext {
-      font-size: 12px;
-      color: #666;
-    }
+    .empty-state-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+    .empty-state-text { font-size: 14px; margin-bottom: 8px; }
+    .empty-state-subtext { font-size: 12px; color: #666; }
   </style>
 </head>
 <body>
@@ -229,12 +167,11 @@
       <button id="refreshBtn">Refresh</button>
     </div>
   </header>
-  
+
   <div class="main-container">
     <div id="visualization">
       <svg id="tree-svg"></svg>
     </div>
-    
     <div id="details-panel">
       <h2>Details</h2>
       <div id="details-content">
@@ -246,7 +183,7 @@
       </div>
     </div>
   </div>
-  
+
   <div class="status-bar" id="statusBar">Loading project tree...</div>
 
   <script nonce="{{nonce}}">
@@ -255,14 +192,14 @@
     const detailsContent = document.getElementById('details-content');
     const statusBar = document.getElementById('statusBar');
     const refreshBtn = document.getElementById('refreshBtn');
-    
+
     let treeData = null;
     let circularDeps = [];
     let root = null;
     let treeLayout = null;
     let g = null;
     let zoom = null;
-    let nodeIdCounter = 0; // For generating unique node IDs
+    let nodeIdCounter = 0; // unique IDs for D3 key functions
 
     refreshBtn.addEventListener('click', () => {
       vscode.postMessage({ command: 'refresh' });
@@ -270,32 +207,32 @@
     });
 
     window.addEventListener('message', event => {
-      const message = event.data;
-      switch (message.type) {
+      const msg = event.data;
+      switch (msg.type) {
         case 'treeData':
-          treeData = message.tree;
+          treeData = msg.tree;
           renderTree();
           break;
         case 'graphData':
-          // Store for potential future use
-          break;
+          break; // reserved for future graph view
         case 'circularDependencies':
-          circularDeps = message.circles;
+          circularDeps = msg.circles;
           if (circularDeps.length > 0) {
             statusBar.textContent = `⚠️ Found ${circularDeps.length} circular ${circularDeps.length === 1 ? 'dependency' : 'dependencies'}`;
           }
           break;
         case 'nodeStats':
-          showDetails(message.stats);
+          showDetails(msg.stats);
           break;
         case 'status':
-          statusBar.textContent = message.text;
+          statusBar.textContent = msg.text;
           break;
       }
     });
 
     vscode.postMessage({ command: 'ready' });
 
+    // ─── renderTree: full rebuild on new data or refresh ───────────────────────
     function renderTree() {
       if (!treeData || treeData.length === 0) {
         svg.html('<text x="50%" y="50%" text-anchor="middle" fill="#888">No workspace folder open</text>');
@@ -309,106 +246,94 @@
       svg.selectAll('*').remove();
       svg.attr('width', width).attr('height', height);
 
-      // Merge all workspace folders into a single root
+      // Merge all workspace roots under a single synthetic node
       const mergedRoot = {
         name: 'Workspace',
         type: 'folder',
-        path: '',
+        path: '', // intentionally empty — guarded in click handler
         children: treeData
       };
 
-      // Build hierarchy from tree data
       root = d3.hierarchy(mergedRoot, d => d.children);
-      
-      // Collapse all children initially except first level
+
+      // Collapse everything beyond depth 1 on first load
       root.descendants().forEach(d => {
         if (d.depth > 1 && d.children) {
           d._children = d.children;
           d.children = null;
         }
       });
-      
-      // Create tree layout
+
+      // HORIZONTAL layout: size([vertical-spread, horizontal-spread])
+      // Note the argument order is [y-extent, x-extent] because we swap axes
       treeLayout = d3.tree()
-        .size([width - 100, height - 100])
-        .separation((a, b) => (a.parent === b.parent ? 1 : 1.2));
+        .size([height - 80, width - 260])
+        .separation((a, b) => a.parent === b.parent ? 1 : 1.5);
 
-      g = svg.append('g')
-        .attr('transform', 'translate(50, 50)');
+      g = svg.append('g');
 
-      // Add zoom behavior (only once)
-      // Add zoom behavior (initialize once, reset transform on full refresh)
+      // Initialise zoom once; reset transform to home on every full refresh
       if (!zoom) {
         zoom = d3.zoom()
           .scaleExtent([0.1, 3])
-          .on('zoom', (event) => {
-            g.attr('transform', event.transform);
-          });
+          .on('zoom', event => g.attr('transform', event.transform));
         svg.call(zoom);
       }
-      
-      // Reset zoom transform to initial position
-      svg.call(zoom.transform, d3.zoomIdentity.translate(50, 50));
+      svg.call(zoom.transform, d3.zoomIdentity.translate(40, 40));
 
       updateTree(root);
     }
 
+    // ─── updateTree: in-place D3 update, preserves expand/collapse state ──────
     function updateTree(source) {
       if (!root || !treeLayout || !g) return;
 
-      const duration = 300;
-
-      // Compute the new tree layout
+      const duration = 250;
       treeLayout(root);
 
       const nodes = root.descendants();
       const links = root.links();
 
-      // Update links
+      // Helper: horizontal link path generator (axes swapped)
+      const linkGen = d3.linkHorizontal()
+        .x(d => d.y)   // d.y = horizontal position in horizontal tree
+        .y(d => d.x);  // d.x = vertical position in horizontal tree
+
+      // ── Links ──────────────────────────────────────────────────────────────
       const link = g.selectAll('.link-line')
         .data(links, d => d.target.id || (d.target.id = ++nodeIdCounter));
 
       link.exit().transition().duration(duration)
-        .attr('opacity', 0)
-        .remove();
+        .attr('opacity', 0).remove();
 
       const linkEnter = link.enter().append('path')
         .attr('class', 'link-line')
-        .attr('d', d3.linkVertical()
-          .x(d => source ? source.x : d.x)
-          .y(d => source ? source.y : d.y))
+        // Set initial `d` so SVG never renders a broken path mid-transition
+        .attr('d', linkGen)
         .attr('opacity', 0);
 
       link.merge(linkEnter)
         .transition().duration(duration)
         .attr('opacity', 1)
-        .attr('d', d3.linkVertical()
-          .x(d => d.x)
-          .y(d => d.y));
+        .attr('d', linkGen);
 
-      // Update nodes
+      // ── Nodes ──────────────────────────────────────────────────────────────
       const node = g.selectAll('.node-group')
         .data(nodes, d => d.id || (d.id = ++nodeIdCounter));
 
-      const nodeExit = node.exit();
-      
-      nodeExit.transition().duration(duration)
-        .attr('transform', d => source ? `translate(${source.x},${source.y})` : `translate(${d.x},${d.y})`)
+      // Exit: animate collapsing children toward their parent
+      node.exit()
+        .transition().duration(duration)
+        .attr('transform', source ? `translate(${source.y},${source.x})` : null)
         .attr('opacity', 0)
         .remove();
 
       const nodeEnter = node.enter().append('g')
         .attr('class', 'node-group')
-        .attr('transform', d => `translate(${d.x},${d.y})`)
-        .attr('opacity', 0);
-
-      nodeEnter.append('circle')
-        .attr('class', 'node-circle')
-        .attr('r', d => d.data.type === 'folder' ? 8 : 6)
-        .attr('fill', d => getNodeColor(d))
-        .attr('stroke', '#fff')
-        .attr('stroke-width', 2)
-        .style('cursor', 'pointer')
+        // Enter from source position for a smooth expand animation
+        .attr('transform', source ? `translate(${source.y},${source.x})` : `translate(0,0)`)
+        .attr('opacity', 0)
+        // FIX: click on the GROUP so center and edge both work
         .on('click', (event, d) => {
           if (d.data.type === 'folder') {
             if (d._children) {
@@ -420,232 +345,191 @@
             }
             updateTree(d);
           }
+          // Guard: synthetic Workspace node has no path
           if (d.data.path) {
             vscode.postMessage({ command: 'nodeSelected', path: d.data.path });
           }
         });
 
+      nodeEnter.append('circle')
+        .attr('r', d => d.data.type === 'folder' ? 8 : 5)
+        .attr('fill', getNodeColor)
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 1.5);
+
+      // Label to the RIGHT of the node (horizontal layout)
       nodeEnter.append('text')
         .attr('class', 'node-label')
-        .attr('dy', -12)
-        .attr('text-anchor', 'middle')
-        .text(d => d.data.name.length > 20 ? d.data.name.substring(0, 17) + '...' : d.data.name);
+        .attr('dx', 14)
+        .attr('dy', 4)
+        .attr('text-anchor', 'start')
+        .text(d => {
+          const n = d.data.name;
+          return n.length > 25 ? n.substring(0, 22) + '…' : n;
+        });
 
-      // Add expand/collapse indicator for folders
+      // Expand/collapse indicator — sits LEFT of the circle, never intercepts clicks
       nodeEnter.filter(d => d.data.type === 'folder')
         .append('text')
         .attr('class', 'folder-indicator')
-        .attr('text-anchor', 'middle')
+        .attr('dx', -14)
         .attr('dy', 4)
-        .attr('font-size', '10px')
-        .attr('fill', '#fff')
+        .attr('text-anchor', 'middle')
+        .attr('font-size', '9px')
+        .attr('fill', 'rgba(255,255,255,0.55)')
         .text(d => d._children ? '▶' : '▼');
 
+      // ── Merge & animate to final positions ─────────────────────────────────
       const nodeUpdate = node.merge(nodeEnter);
 
       nodeUpdate.transition().duration(duration)
-        .attr('transform', d => `translate(${d.x},${d.y})`)
+        // HORIZONTAL: translate(d.y, d.x)
+        .attr('transform', d => `translate(${d.y},${d.x})`)
         .attr('opacity', 1);
 
-      nodeUpdate.select('circle')
-        .attr('fill', d => getNodeColor(d));
-
-      nodeUpdate.select('.folder-indicator')
-        .text(d => d._children ? '▶' : '▼');
+      nodeUpdate.select('circle').attr('fill', getNodeColor);
+      nodeUpdate.select('.folder-indicator').text(d => d._children ? '▶' : '▼');
 
       statusBar.textContent = `Showing ${nodes.length} items`;
     }
 
+    // ─── Node colour by file type ──────────────────────────────────────────────
     function getNodeColor(d) {
-      if (d.data.type === 'folder') {
-        return d._children ? '#4a7f95' : '#6a9fb5';
-      }
-      // Color based on file extension
+      if (d.data.type === 'folder') return d._children ? '#4a7f95' : '#6a9fb5';
       const parts = d.data.name.split('.');
-      if (parts.length < 2) return '#b8a538'; // No extension
+      if (parts.length < 2) return '#b8a538';
       const ext = parts[parts.length - 1].toLowerCase();
-      if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) return '#3178c6';
-      if (['py'].includes(ext)) return '#3776ab';
-      if (['cpp', 'c', 'h', 'hpp'].includes(ext)) return '#00599c';
+      if (['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs'].includes(ext)) return '#3178c6';
+      if (['py', 'pyw'].includes(ext))                              return '#3776ab';
+      if (['cpp', 'c', 'h', 'hpp', 'cc', 'cxx'].includes(ext))    return '#00599c';
+      if (['json', 'yaml', 'yml', 'toml'].includes(ext))           return '#cb8b3e';
+      if (['md', 'txt', 'rst'].includes(ext))                      return '#6a9955';
+      if (['css', 'scss', 'sass', 'less'].includes(ext))           return '#563d7c';
+      if (['html', 'htm', 'xml', 'svg'].includes(ext))             return '#e44d26';
+      if (['sh', 'bash', 'zsh', 'ps1'].includes(ext))              return '#89e051';
       return '#b8a538';
     }
 
+    // ─── Details panel ────────────────────────────────────────────────────────
     function showDetails(stats) {
       detailsContent.innerHTML = '';
 
       function addRow(container, label, value) {
         const row = document.createElement('div');
         row.className = 'detail-row';
-        
-        const labelSpan = document.createElement('span');
-        labelSpan.className = 'detail-label';
-        labelSpan.textContent = label;
-        
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'detail-value';
-        valueSpan.textContent = value;
-        
-        row.appendChild(labelSpan);
-        row.appendChild(valueSpan);
+        const lbl = document.createElement('span');
+        lbl.className = 'detail-label';
+        lbl.textContent = label;
+        const val = document.createElement('span');
+        val.className = 'detail-value';
+        val.textContent = value;
+        row.appendChild(lbl);
+        row.appendChild(val);
         container.appendChild(row);
       }
 
-      // File Information Section
-      const fileSection = document.createElement('div');
-      fileSection.className = 'detail-section';
-      
-      const fileTitle = document.createElement('h3');
-      fileTitle.textContent = 'File Information';
-      fileSection.appendChild(fileTitle);
+      function addSection(title) {
+        const sec = document.createElement('div');
+        sec.className = 'detail-section';
+        if (title) {
+          const h3 = document.createElement('h3');
+          h3.textContent = title;
+          sec.appendChild(h3);
+        }
+        detailsContent.appendChild(sec);
+        return sec;
+      }
 
-      const fileName = stats.path.split(/[/\\]/).pop();
-      addRow(fileSection, 'Name', fileName);
+      // File Information
+      const fileSection = addSection('File Information');
+      addRow(fileSection, 'Name', stats.path.split(/[/\\]/).pop());
       addRow(fileSection, 'Type', stats.type);
-      
-      if (stats.size != null) {
-        addRow(fileSection, 'Size', formatBytes(stats.size));
-      }
-      if (stats.lineCount != null && stats.lineCount > 0) {
-        addRow(fileSection, 'Lines', String(stats.lineCount));
-      }
-      if (stats.modifiedAt) {
-        addRow(fileSection, 'Modified', new Date(stats.modifiedAt).toLocaleDateString());
-      }
-      if (stats.createdAt) {
-        addRow(fileSection, 'Created', new Date(stats.createdAt).toLocaleDateString());
-      }
-      
-      detailsContent.appendChild(fileSection);
+      if (stats.size != null)                       addRow(fileSection, 'Size',     formatBytes(stats.size));
+      if (stats.lineCount > 0)                      addRow(fileSection, 'Lines',    String(stats.lineCount));
+      if (stats.modifiedAt)                         addRow(fileSection, 'Modified', new Date(stats.modifiedAt).toLocaleDateString());
+      if (stats.createdAt)                          addRow(fileSection, 'Created',  new Date(stats.createdAt).toLocaleDateString());
+      if (stats.childCount != null)                 addRow(fileSection, 'Children', String(stats.childCount));
 
-      // Git Information Section
+      // Git Information
       if (stats.gitInfo) {
-        const gitSection = document.createElement('div');
-        gitSection.className = 'detail-section';
-        
-        const gitTitle = document.createElement('h3');
-        gitTitle.textContent = 'Git Information';
-        gitSection.appendChild(gitTitle);
-
-        addRow(gitSection, 'Author', stats.gitInfo.author);
-        addRow(gitSection, 'Commits', String(stats.gitInfo.commitCount));
-        
-        detailsContent.appendChild(gitSection);
+        const gitSection = addSection('Git Information');
+        addRow(gitSection, 'Author',        stats.gitInfo.author);
+        addRow(gitSection, 'Commits',       String(stats.gitInfo.commitCount));
+        addRow(gitSection, 'Last Modified', stats.gitInfo.lastModified);
       }
 
-      // Dependencies Section
+      // Dependencies
       if (stats.dependencies && Object.keys(stats.dependencies).length > 0) {
-        const depSection = document.createElement('div');
-        depSection.className = 'detail-section';
-        
-        const depTitle = document.createElement('h3');
-        depTitle.textContent = `Dependencies (${Object.keys(stats.dependencies).length})`;
-        depSection.appendChild(depTitle);
-
-        const depList = document.createElement('ul');
-        depList.className = 'dep-list';
-
+        const depSection = addSection(`Dependencies (${Object.keys(stats.dependencies).length})`);
+        const ul = document.createElement('ul');
+        ul.className = 'dep-list';
         for (const [importPath, resolvedPath] of Object.entries(stats.dependencies)) {
-          const depItem = document.createElement('li');
-          depItem.className = 'dep-item';
-
-          const importSpan = document.createElement('span');
-          importSpan.className = 'dep-import';
-          importSpan.textContent = importPath;
-          depItem.appendChild(importSpan);
-
-          if (resolvedPath) {
-            const resolvedSpan = document.createElement('span');
-            resolvedSpan.className = 'dep-resolved';
-            resolvedSpan.textContent = '→ ' + resolvedPath.split(/[/\\]/).pop();
-            depItem.appendChild(resolvedSpan);
-          } else {
-            const unresolvedSpan = document.createElement('span');
-            unresolvedSpan.className = 'dep-unresolved';
-            unresolvedSpan.textContent = 'external';
-            depItem.appendChild(unresolvedSpan);
-          }
-
-          depList.appendChild(depItem);
+          const li = document.createElement('li');
+          li.className = 'dep-item';
+          const imp = document.createElement('span');
+          imp.className = 'dep-import';
+          imp.textContent = importPath;
+          li.appendChild(imp);
+          const res = document.createElement('span');
+          res.className = resolvedPath ? 'dep-resolved' : 'dep-unresolved';
+          res.textContent = resolvedPath ? '→ ' + resolvedPath.split(/[/\\]/).pop() : 'external';
+          li.appendChild(res);
+          ul.appendChild(li);
         }
-
-        depSection.appendChild(depList);
-        detailsContent.appendChild(depSection);
+        depSection.appendChild(ul);
       }
 
-      // Circular Dependencies Warning
+      // Circular Dependencies
       if (circularDeps.length > 0) {
-        const involvedCycles = circularDeps.filter(cycle => cycle.includes(stats.path));
-        if (involvedCycles.length > 0) {
-          const circularSection = document.createElement('div');
-          circularSection.className = 'detail-section';
-
-          const warningDiv = document.createElement('div');
-          warningDiv.className = 'circular-warning';
-
-          const warningTitle = document.createElement('div');
-          warningTitle.className = 'circular-warning-title';
-          warningTitle.textContent = `⚠️ Circular Dependencies (${involvedCycles.length})`;
-          warningDiv.appendChild(warningTitle);
-
-          for (const cycle of involvedCycles) {
-            const cycleDiv = document.createElement('div');
-            cycleDiv.style.marginTop = '8px';
-            cycleDiv.style.fontSize = '11px';
-            cycleDiv.textContent = cycle.map(p => p.split(/[/\\]/).pop()).join(' → ');
-            warningDiv.appendChild(cycleDiv);
+        const cycles = circularDeps.filter(c => c.includes(stats.path));
+        if (cycles.length > 0) {
+          const sec = addSection('');
+          const warn = document.createElement('div');
+          warn.className = 'circular-warning';
+          const title = document.createElement('div');
+          title.className = 'circular-warning-title';
+          title.textContent = `⚠️ Circular Dependencies (${cycles.length})`;
+          warn.appendChild(title);
+          for (const cycle of cycles) {
+            const div = document.createElement('div');
+            div.style.cssText = 'margin-top:8px;font-size:11px;';
+            div.textContent = cycle.map(p => p.split(/[/\\]/).pop()).join(' → ');
+            warn.appendChild(div);
           }
-
-          circularSection.appendChild(warningDiv);
-          detailsContent.appendChild(circularSection);
+          sec.appendChild(warn);
         }
       }
 
-      // File Preview Section
+      // File Preview
       if (stats.preview) {
-        const previewSection = document.createElement('div');
-        previewSection.className = 'detail-section';
-        
-        const previewTitle = document.createElement('h3');
-        previewTitle.textContent = 'Preview';
-        previewSection.appendChild(previewTitle);
-
-        const previewPre = document.createElement('pre');
-        previewPre.style.background = 'var(--bg-tertiary)';
-        previewPre.style.padding = '12px';
-        previewPre.style.borderRadius = '4px';
-        previewPre.style.fontSize = '11px';
-        previewPre.style.overflow = 'auto';
-        previewPre.style.maxHeight = '200px';
-        previewPre.style.fontFamily = "'Consolas', 'Monaco', monospace";
-        previewPre.textContent = stats.preview;
-        
-        previewSection.appendChild(previewPre);
-        detailsContent.appendChild(previewSection);
+        const sec = addSection('Preview');
+        const pre = document.createElement('pre');
+        pre.style.cssText = 'background:var(--bg-tertiary);padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:200px;font-family:Consolas,Monaco,monospace;white-space:pre-wrap;';
+        pre.textContent = stats.preview;
+        sec.appendChild(pre);
       }
     }
 
+    // ─── Utilities ─────────────────────────────────────────────────────────────
     function formatBytes(bytes) {
       if (bytes === 0) return '0 B';
       const k = 1024;
       const sizes = ['B', 'KB', 'MB', 'GB'];
-      const i = Math.floor(Math.log(bytes) / Math.log(k));
-      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+      const idx = Math.floor(Math.log(bytes) / Math.log(k)); // renamed: was `i`, clashed with nodeIdCounter
+      return parseFloat((bytes / Math.pow(k, idx)).toFixed(2)) + ' ' + sizes[idx];
     }
 
-    // Handle window resize
+    // Debounced resize — updates layout size only, zoom state preserved
     let resizeTimeout;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
-        if (treeData && root) {
-          // Just update the tree layout size, don't rebuild everything
+        if (treeData && root && treeLayout) {
           const container = svg.node().parentElement;
           const width = container.clientWidth;
           const height = container.clientHeight;
-          
           svg.attr('width', width).attr('height', height);
-          
-          treeLayout.size([width - 100, height - 100]);
+          treeLayout.size([height - 80, width - 260]);
           updateTree(root);
         }
       }, 250);
