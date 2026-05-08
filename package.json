@@ -2,10 +2,9 @@
   "name": "showy",
   "displayName": "Showy",
   "description": "Interactive project visualizer with dependency graphs, circular dependency detection, and git insights.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "omob-publish",
   "license": "MIT",
-  "icon": "media/showy-logo.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/omob2022-commits/showy.git"
