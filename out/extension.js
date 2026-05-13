@@ -304,6 +304,84 @@ async function getFilePreview(filePath, maxChars = 500) {
         return undefined;
     }
 }
+const DATABASE_MODULES = new Set([
+    'pg', 'pg-native', 'mysql', 'mysql2', 'mongodb', 'mongoose', 'redis', 'ioredis',
+    'sequelize', 'typeorm', 'knex', 'sqlite3', 'better-sqlite3', 'tedious', 'mssql',
+    'oracledb', 'prisma', '@prisma/client', 'cockroachdb', 'neo4j-driver', 'cassandra-driver'
+]);
+async function scanFileDatabaseDependencies(filePath) {
+    const result = {
+        clients: [],
+        connectionStrings: [],
+        envVariables: [],
+        projectPackages: []
+    };
+    try {
+        const content = await fs.promises.readFile(filePath, 'utf-8');
+        const importRegex = /(?:import\s+[\s\S]+?from\s+['"]([^'"]+)['"])|(?:require\(['"]([^'"]+)['"]\))/g;
+        let match;
+        while ((match = importRegex.exec(content)) !== null) {
+            const candidate = match[1] || match[2];
+            if (candidate) {
+                const base = candidate.split('/')[0];
+                if (DATABASE_MODULES.has(base) && !result.clients.includes(base)) {
+                    result.clients.push(base);
+                }
+            }
+        }
+        const configRegex = /(?:connectionString|connString|dsn|databaseUrl|DATABASE_URL|DB_CONNECTION|DB_HOST|DB_USER|DB_NAME|DB_PASSWORD|DB_PASS|MONGO_URI|MONGODB_URI)/gi;
+        let found;
+        while ((found = configRegex.exec(content)) !== null) {
+            const token = found[0];
+            if (token.toUpperCase().endsWith('_URL') || token.toUpperCase().endsWith('_URI') || token.toUpperCase().includes('CONNECTION')) {
+                if (!result.connectionStrings.includes(token)) {
+                    result.connectionStrings.push(token);
+                }
+            }
+            else if (!result.envVariables.includes(token)) {
+                result.envVariables.push(token);
+            }
+        }
+        const connStringRegex = /(postgres(?:ql)?:\/\/|mysql:\/\/|mongodb(?:\+srv)?:\/\/|redis:\/\/|mssql:\/\/|sqlite:\/\/|oracle:\/\/)/gi;
+        const connStringMatch = content.match(connStringRegex);
+        if (connStringMatch) {
+            for (const entry of connStringMatch) {
+                if (!result.connectionStrings.includes(entry)) {
+                    result.connectionStrings.push(entry);
+                }
+            }
+        }
+    }
+    catch {
+        // ignore unreadable files
+    }
+    const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
+    if (workspaceFolder) {
+        result.projectPackages = await scanWorkspaceDatabasePackages(workspaceFolder.uri.fsPath);
+    }
+    return result;
+}
+async function scanWorkspaceDatabasePackages(rootPath) {
+    const detected = [];
+    try {
+        const packageJsonPath = path.join(rootPath, 'package.json');
+        if (await fs.promises.stat(packageJsonPath)) {
+            const content = await fs.promises.readFile(packageJsonPath, 'utf-8');
+            const pkg = JSON.parse(content);
+            const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
+            for (const dep of Object.keys(allDeps)) {
+                const base = dep.split('/')[0];
+                if (DATABASE_MODULES.has(base) && !detected.includes(base)) {
+                    detected.push(base);
+                }
+            }
+        }
+    }
+    catch {
+        // ignore missing package.json or parse errors
+    }
+    return detected;
+}
 async function scanFolder(uri, displayName) {
     const folderNode = {
         id: uri.toString(),
@@ -391,6 +469,10 @@ async function sendNodeStats(nodePath) {
                 if (gitInfo) {
                     stats.gitInfo = gitInfo;
                 }
+            }
+            const databaseInfo = await scanFileDatabaseDependencies(nodePath);
+            if (databaseInfo.clients.length > 0 || databaseInfo.connectionStrings.length > 0 || databaseInfo.envVariables.length > 0 || databaseInfo.projectPackages.length > 0) {
+                stats.databaseInfo = databaseInfo;
             }
             const previewSize = getConfig('previewSize') ?? 500;
             const preview = await getFilePreview(nodePath, previewSize);

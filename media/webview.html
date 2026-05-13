@@ -440,6 +440,37 @@
         return sec;
       }
 
+      // File Preview
+      if (stats.preview) {
+        const sec = addSection('Preview');
+        const pre = document.createElement('pre');
+        pre.style.cssText = 'background:var(--bg-tertiary);padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:200px;font-family:Consolas,Monaco,monospace;white-space:pre-wrap;';
+        pre.textContent = stats.preview;
+        sec.appendChild(pre);
+      }
+
+      if (stats.databaseInfo) {
+        const dbSection = addSection('Database');
+        if (stats.databaseInfo.clients && stats.databaseInfo.clients.length > 0) {
+          addRow(dbSection, 'Clients', stats.databaseInfo.clients.join(', '));
+        }
+        if (stats.databaseInfo.projectPackages && stats.databaseInfo.projectPackages.length > 0) {
+          addRow(dbSection, 'Project DB Packages', stats.databaseInfo.projectPackages.join(', '));
+        }
+        if (stats.databaseInfo.connectionStrings && stats.databaseInfo.connectionStrings.length > 0) {
+          const conn = document.createElement('div');
+          conn.style.cssText = 'font-size:12px; color:#6a9955; margin-top:4px; white-space:pre-wrap;';
+          conn.textContent = stats.databaseInfo.connectionStrings.join(', ');
+          dbSection.appendChild(conn);
+        }
+        if (stats.databaseInfo.envVariables && stats.databaseInfo.envVariables.length > 0) {
+          const envList = document.createElement('div');
+          envList.style.cssText = 'font-size:12px; color:#9cdcfe; margin-top:4px; white-space:pre-wrap;';
+          envList.textContent = stats.databaseInfo.envVariables.join(', ');
+          dbSection.appendChild(envList);
+        }
+      }
+
       // File Information
       const fileSection = addSection('File Information');
       addRow(fileSection, 'Name', stats.path.split(/[/\\]/).pop());
@@ -498,15 +529,6 @@
           }
           sec.appendChild(warn);
         }
-      }
-
-      // File Preview
-      if (stats.preview) {
-        const sec = addSection('Preview');
-        const pre = document.createElement('pre');
-        pre.style.cssText = 'background:var(--bg-tertiary);padding:12px;border-radius:4px;font-size:11px;overflow:auto;max-height:200px;font-family:Consolas,Monaco,monospace;white-space:pre-wrap;';
-        pre.textContent = stats.preview;
-        sec.appendChild(pre);
       }
     }
 

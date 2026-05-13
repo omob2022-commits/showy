@@ -2,7 +2,7 @@
   "name": "showy",
   "displayName": "Showy",
   "description": "Interactive project visualizer with dependency graphs, circular dependency detection, and git insights.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "omob-publish",
   "license": "MIT",
   "repository": {
@@ -32,12 +32,12 @@
       {
         "command": "showy.openProjectMap",
         "title": "Showy: Open Project Map",
-        "icon": "$(graph)"
+        "icon": "$(eye)"
       },
       {
         "command": "showy.openShowySidebar",
         "title": "Showy: Reveal Sidebar",
-        "icon": "$(graph)"
+        "icon": "$(eye)"
       }
     ],
     "viewsContainers": {
@@ -45,7 +45,7 @@
         {
           "id": "showySidebar",
           "title": "Showy",
-          "icon": "$(graph)"
+          "icon": "$(eye)"
         }
       ]
     },
